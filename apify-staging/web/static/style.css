@@ -1,14 +1,16 @@
 :root {
   color-scheme: light;
-  --bg: #f4f8fc;
+  --bg: #eaf1f8;
   --panel: #ffffff;
-  --border: #d9e4ef;
-  --text: #172b3d;
-  --muted: #5b6b7b;
+  --panel-2: #f4f8fc;
+  --border: #cfdcea;
+  --text: #0f1e2b;
+  --muted: #45596b;
   --navy: #0a2540;
   --accent: #0a6ebd;
   --accent-dk: #085a9c;
-  --accent-2: #4aa3e0;
+  --accent-2: #5fb0ea;
+  --shadow: 0 1px 3px rgba(10,37,64,0.06), 0 10px 30px rgba(10,37,64,0.08);
 }
 
 * { box-sizing: border-box; }
@@ -81,6 +83,7 @@ form, #status-panel {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 1.25rem;
+  box-shadow: var(--shadow);
 }
 
 #status-panel h2 { color: var(--navy); }
@@ -98,7 +101,7 @@ input, select, textarea {
   padding: 0.5rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: var(--bg);
+  background: var(--panel-2);
   color: var(--text);
 }
 
@@ -115,6 +118,7 @@ button {
   color: white;
   cursor: pointer;
   transition: background .2s;
+  box-shadow: 0 6px 18px rgba(10,110,189,0.30);
 }
 
 button:hover { background: var(--accent-dk); }
