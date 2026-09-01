@@ -1,0 +1,235 @@
+const presetSelect = document.getElementById("preset");
+const actorIdInput = document.getElementById("actor-id");
+const runInputArea = document.getElementById("run-input");
+const form = document.getElementById("run-form");
+const runButton = document.getElementById("run-button");
+const statusLine = document.getElementById("status-line");
+const resultsPreview = document.getElementById("results-preview");
+const resultsMeta = document.getElementById("results-meta");
+const downloadLink = document.getElementById("download-link");
+
+const MAX_ROWS = 100;
+const MAX_CELL_LENGTH = 150;
+
+function formatCell(value) {
+  if (value === undefined || value === null || value === "") return "";
+  const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+  return text.length > MAX_CELL_LENGTH ? text.slice(0, MAX_CELL_LENGTH) + "…" : text;
+}
+
+function safeHref(url) {
+  if (typeof url !== "string") return null;
+  const trimmed = url.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : null;
+}
+
+function linkCell(url, label) {
+  const td = document.createElement("td");
+  const href = safeHref(url);
+  if (href) {
+    const a = document.createElement("a");
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = label;
+    td.appendChild(a);
+  } else {
+    td.textContent = "—";
+  }
+  return td;
+}
+
+function renderLeadsTable(entities) {
+  resultsPreview.textContent = "";
+
+  if (!entities.length) {
+    resultsPreview.textContent = "No items returned.";
+    return;
+  }
+
+  const rows = entities.slice(0, MAX_ROWS);
+  const showWebsite = rows.some((e) => safeHref(e.website_url));
+
+  const table = document.createElement("table");
+
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  const headers = ["Name", "Handle", "Followers", "Profile"];
+  if (showWebsite) headers.push("Website");
+  headers.forEach((label) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach((e) => {
+    const tr = document.createElement("tr");
+
+    const nameTd = document.createElement("td");
+    nameTd.textContent = e.display_name || e.handle || "—";
+    tr.appendChild(nameTd);
+
+    const handleTd = document.createElement("td");
+    handleTd.textContent = e.handle || "—";
+    tr.appendChild(handleTd);
+
+    const followersTd = document.createElement("td");
+    followersTd.textContent = typeof e.follower_count === "number" ? e.follower_count.toLocaleString() : "—";
+    tr.appendChild(followersTd);
+
+    tr.appendChild(linkCell(e.source_url, "View profile ↗"));
+    if (showWebsite) tr.appendChild(linkCell(e.website_url, "Website ↗"));
+
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  resultsPreview.appendChild(table);
+
+  resultsMeta.textContent =
+    entities.length > MAX_ROWS
+      ? `Showing ${MAX_ROWS} of ${entities.length} people (download for the full set).`
+      : `${entities.length} ${entities.length === 1 ? "person" : "people"}.`;
+}
+
+function renderTable(items) {
+  resultsPreview.textContent = "";
+
+  if (!items.length) {
+    resultsPreview.textContent = "No items returned.";
+    return;
+  }
+
+  const rows = items.slice(0, MAX_ROWS);
+  const columns = [];
+  const seen = new Set();
+  rows.forEach((item) => {
+    Object.keys(item).forEach((key) => {
+      if (!seen.has(key)) {
+        seen.add(key);
+        columns.push(key);
+      }
+    });
+  });
+
+  const table = document.createElement("table");
+
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  columns.forEach((col) => {
+    const th = document.createElement("th");
+    th.textContent = col;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach((item) => {
+    const tr = document.createElement("tr");
+    columns.forEach((col) => {
+      const td = document.createElement("td");
+      const value = formatCell(item[col]);
+      td.textContent = value;
+      td.title = value;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  resultsPreview.appendChild(table);
+
+  resultsMeta.textContent =
+    items.length > MAX_ROWS
+      ? `Showing ${MAX_ROWS} of ${items.length} items (download for the full set).`
+      : `${items.length} item${items.length === 1 ? "" : "s"}.`;
+}
+
+let pollTimer = null;
+
+presetSelect.addEventListener("change", () => {
+  const opt = presetSelect.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  actorIdInput.value = opt.dataset.actorId;
+  runInputArea.value = JSON.stringify(JSON.parse(opt.dataset.input), null, 2);
+});
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (pollTimer) clearInterval(pollTimer);
+  downloadLink.style.display = "none";
+  resultsPreview.textContent = "";
+  resultsMeta.textContent = "";
+
+  let runInput;
+  try {
+    runInput = runInputArea.value.trim() ? JSON.parse(runInputArea.value) : {};
+  } catch (err) {
+    statusLine.textContent = "Run Input is not valid JSON: " + err.message;
+    return;
+  }
+
+  runButton.disabled = true;
+  statusLine.textContent = "Starting run...";
+
+  try {
+    const res = await fetch("/api/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        actor_id: actorIdInput.value.trim(),
+        run_input: runInput,
+        platform: presetSelect.value || "custom",
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      statusLine.textContent = "Error: " + (data.error || res.statusText);
+      runButton.disabled = false;
+      return;
+    }
+    pollTimer = setInterval(() => pollStatus(data.job_id), 2000);
+    pollStatus(data.job_id);
+  } catch (err) {
+    statusLine.textContent = "Request failed: " + err.message;
+    runButton.disabled = false;
+  }
+});
+
+async function pollStatus(jobId) {
+  const res = await fetch(`/api/status/${jobId}`);
+  const data = await res.json();
+  if (!res.ok) {
+    statusLine.textContent = "Error: " + (data.error || res.statusText);
+    clearInterval(pollTimer);
+    runButton.disabled = false;
+    return;
+  }
+
+  statusLine.textContent = `Status: ${data.status} - ${data.item_count} items scraped so far`;
+
+  if (data.status === "SUCCEEDED") {
+    clearInterval(pollTimer);
+    runButton.disabled = false;
+    if (data.db_status) {
+      statusLine.textContent += ` (${data.db_status})`;
+    }
+    const resultRes = await fetch(`/api/result/${jobId}`);
+    const resultData = await resultRes.json();
+    if (resultData.entities) {
+      renderLeadsTable(resultData.entities);
+    } else {
+      renderTable(resultData.items);
+    }
+    downloadLink.href = `/api/download/${jobId}`;
+    downloadLink.style.display = "inline-block";
+  } else if (data.status === "FAILED") {
+    clearInterval(pollTimer);
+    runButton.disabled = false;
+    statusLine.textContent = "Failed: " + data.error;
+  }
+}

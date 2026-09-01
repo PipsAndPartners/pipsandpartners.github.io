@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Apify Scraper Console</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <h1>Apify Scraper Console</h1>
+  <p class="subtitle">Pick a saved platform preset or type any Apify actor ID and its JSON input, then run it live.</p>
+
+  <div class="layout">
+    <form id="run-form">
+      <label>Social media / platform
+        <select id="preset">
+          <option value="" {% if not selected_platform or selected_platform == "custom" %}selected{% endif %}>-- custom actor --</option>
+          {% for name, cfg in presets.items() %}
+          <option value="{{ name }}" data-actor-id="{{ cfg.actor_id }}" data-input='{{ cfg.default_input | tojson }}' {% if name == selected_platform %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>Apify Actor ID
+        <input type="text" id="actor-id" placeholder="e.g. apify/instagram-profile-scraper" value="{{ initial_actor_id }}" required>
+      </label>
+
+      <label>Run Input (JSON)
+        <textarea id="run-input" rows="16" placeholder='{"usernames": ["nasa"]}'>{{ initial_run_input_json }}</textarea>
+      </label>
+
+      <button type="submit" id="run-button">Run actor</button>
+    </form>
+
+    <section id="status-panel">
+      <h2>Run status</h2>
+      <p id="status-line">No run started yet.</p>
+      <p id="results-meta"></p>
+      <div id="results-preview" class="table-wrap"></div>
+      <a id="download-link" style="display:none">Download full JSON</a>
+    </section>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
