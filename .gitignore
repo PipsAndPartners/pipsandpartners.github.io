@@ -1,7 +1,11 @@
-.venv/
-.env
-results/
-reports/
-__pycache__/
-*.pyc
-web/last_run.json
+# Local backups / scratch
+_backup_before_*/
+*.bak
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# The apify-staging/ subproject keeps its own .gitignore

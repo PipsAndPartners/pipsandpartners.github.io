@@ -1,0 +1,242 @@
+# IB Discovery & Scoring Pipeline
+
+Finds potential Introducing Brokers (IBs) / affiliates on social media via Apify, stores them in a local Postgres database, links the same person across platforms, and scores each one as a prospect.
+
+## What this app does
+
+1. **Scrapes profiles** from LinkedIn, Instagram, Twitter/X, Facebook, TikTok, or Douyin using Apify actors.
+2. **Stores everything** in Postgres: raw JSON (forever, for audit) + a cleaned-up "entities" table (one row per person per platform).
+3. **Links the same person across platforms** when there's evidence (matching phone, email, website, or bio/handle mentions) — see `db/02_resolve.sql`.
+4. **Scores every entity** as a potential IB across 8 signals (relevance, brand safety, engagement, etc.) — see `scoring.py`.
+5. **Exports a readable report** (HTML, clickable links) you can open in a browser.
+
+There are two ways to use it: a **web console** (click buttons, no code) or the **command line** (scriptable).
+
+---
+
+## Flow chart
+
+```mermaid
+flowchart TD
+    A[You: pick a platform + input] --> B{Web console or CLI?}
+    B -->|Web browser| C[web/app.py]
+    B -->|Terminal| D[pipeline.py]
+    C --> E[runner.py: start Apify actor, poll live]
+    D --> E
+    E --> F[(Apify actor runs\non Apify's cloud)]
+    F --> E
+    E --> G[storage.py\nsave results/*.json]
+    E --> H[db/loader.py\nwrite raw JSON to staging_&lt;platform&gt;]
+    H --> I[db/loader.py\nupsert entities + follower_history]
+    I --> J[db/02_resolve.sql\nlink same person across platforms]
+    I --> K[db/run_scoring.py\ncompute 8 scores via scoring.py]
+    K --> L[db/export_report.py\ngenerate HTML report]
+    J --> L
+    L --> M[You open reports/leads_report.html]
+```
+
+## Class diagram
+
+Python here is mostly modules with a consistent function contract rather than deep class hierarchies — this shows that contract: every `platforms/*.py` file implements the same shape, and the rest of the app is built against that shape, not against any one platform.
+
+```mermaid
+classDiagram
+    class PlatformModule {
+        <<interface>>
+        +ACTOR_ID: str
+        +DEFAULT_INPUT: dict
+        +build_input(overrides) dict
+        +to_entity(item) dict
+        +extract_engagement(item) dict?
+        +extract_related_links(item) list?
+    }
+    class LinkedIn
+    class Instagram
+    class Twitter
+    class Facebook
+    class TikTok
+    class Douyin
+    PlatformModule <|.. LinkedIn
+    PlatformModule <|.. Instagram
+    PlatformModule <|.. Twitter
+    PlatformModule <|.. Facebook
+    PlatformModule <|.. TikTok
+    PlatformModule <|.. Douyin
+
+    class ApifyConfig {
+        +get_client() ApifyClient
+    }
+    class Runner {
+        +run_actor_live(client, platform, actor_id, run_input, poll_seconds, on_progress) list
+    }
+    class Storage {
+        +save_items(platform, items, output_dir) Path
+    }
+    class Loader {
+        +load_platform_results(conn, platform, items, run_id) int
+    }
+    class ScoringEngine {
+        +score_entity(entity, raw, follower_history, posts) dict
+    }
+    class ReportExporter {
+        +build_html(rows, links_by_entity) str
+    }
+    class Pipeline {
+        <<CLI entrypoint>>
+        +main()
+    }
+    class WebConsole {
+        <<Flask app>>
+        +discovery_desk()
+        +apify_console()
+        +start_run()
+        +job_status()
+    }
+
+    Pipeline --> ApifyConfig
+    Pipeline --> Runner
+    Pipeline --> Storage
+    Pipeline --> Loader
+    Pipeline --> PlatformModule : picks module by name
+
+    WebConsole --> ApifyConfig
+    WebConsole --> Runner
+    WebConsole --> Storage
+    WebConsole --> Loader
+    WebConsole --> PlatformModule : picks module by name
+
+    Loader --> PlatformModule : calls to_entity()
+    ScoringEngine --> PlatformModule : calls extract_engagement()
+    ReportExporter --> PlatformModule : calls extract_related_links()
+```
+
+---
+
+## One-time setup
+
+Already done on this machine, listed here so you know what exists:
+
+- Python 3.12 + a virtual environment at `.venv\`
+- All dependencies installed (`requirements.txt`)
+- A local Postgres 17 server (portable install, not a Windows service — see "Starting Postgres" below) at `%LOCALAPPDATA%\Programs\pgsql17\pgsql`, database name `ib_discovery`
+- Schema applied (tables: `staging_<platform>`, `entities`, `entity_links`, `entity_scores`, `entity_follower_history`)
+- `.env` holds your Apify token + database connection string (never commit this file — it's gitignored)
+
+If you ever need to reapply the schema from scratch:
+```
+.\.venv\Scripts\python.exe db\run_sql_file.py db\01_schema.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\04_scores.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\05_follower_history.sql
+```
+
+### Starting Postgres
+
+Postgres runs as a plain background process here (not a Windows service, since this machine doesn't have admin rights to install one). **It does not start automatically** — run this once per computer restart:
+```
+.\db\start_postgres.ps1
+```
+It's safe to run even if already running (just prints "accepting connections").
+
+---
+
+## How to use it — Web console (easiest)
+
+1. Make sure Postgres is running (see above).
+2. Start the app:
+   ```
+   .\.venv\Scripts\python.exe web\app.py
+   ```
+3. Open **http://127.0.0.1:5000** in your browser.
+4. The landing page is the **Discovery Desk** — a local-first workspace for importing public
+   profile exports (CSV), scoring them, and tracking review status. It stores leads only in your
+   browser's local storage. Use the **Apify console** tab (or go straight to
+   **http://127.0.0.1:5000/apify**) to run actors.
+5. On the Apify console, pick a **platform** from the dropdown (linkedin / instagram / twitter / facebook / tiktok / douyin), or leave it on "custom" and type any Apify actor ID yourself.
+6. Edit the **Run Input JSON** if you want (search terms, usernames, max items, etc.) — it's pre-filled with a sensible default, or whatever you ran last time for that platform.
+7. Click **Run actor**. You'll see live status (`RUNNING - 12 items scraped so far...`) until it finishes.
+8. Results show as a table, save to `results/<platform>_results.json`, and (for the 6 built-in platforms) automatically load into Postgres too.
+
+To stop the app, close its terminal / stop the background process.
+
+**Note:** this console has no login by default — fine on your own machine, but if you ever put it on the internet, set `WEB_USERNAME` / `WEB_PASSWORD` environment variables first (see `Procfile`/deployment notes), otherwise anyone with the link can run actors on your Apify account and spend your credits.
+
+---
+
+## How to use it — Command line
+
+Scrape a platform:
+```
+.\.venv\Scripts\python.exe pipeline.py --platform linkedin
+.\.venv\Scripts\python.exe pipeline.py --platform tiktok
+.\.venv\Scripts\python.exe pipeline.py --platform all          # every platform, one after another
+```
+
+Useful flags:
+- `--search-query "your search"` — override the default search term (linkedin/twitter)
+- `--usernames user1 user2` — scrape specific people instead of searching (instagram/tiktok/twitter)
+- `--urls https://...` — scrape specific page URLs (facebook/douyin)
+- `--no-db` — skip the Postgres load, JSON file only
+
+Score everyone currently in the database:
+```
+.\.venv\Scripts\python.exe db\run_scoring.py
+```
+
+Export a readable report (HTML, opens in any browser):
+```
+.\.venv\Scripts\python.exe db\export_report.py
+.\.venv\Scripts\python.exe db\export_report.py --platform tiktok --output reports\tiktok_leads.html
+```
+
+Typical workflow for a new batch:
+```
+.\.venv\Scripts\python.exe pipeline.py --platform tiktok
+.\.venv\Scripts\python.exe db\run_scoring.py
+.\.venv\Scripts\python.exe db\export_report.py
+```
+Then open `reports\leads_report.html`.
+
+---
+
+## Reading the report
+
+Each row is one person, ranked by **composite score** (green ≥70, yellow 40–69, red <40):
+
+| Column | Meaning |
+|---|---|
+| Relevance | 0–100, how well their bio matches forex/IB keywords (real, keyword-based) |
+| Brand Safety | 0–100, crude scam-language keyword screen (not real content moderation) |
+| Audience Quality | 0–100, weak follower/connections ratio proxy |
+| Engagement | % — **real** for TikTok/Twitter (computed from actual post likes/comments/shares); blank for platforms without post data |
+| Growth | % change in followers since the last time they were scraped — blank until scraped twice |
+| Est. Post Price | Rough $/1000-followers ballpark, nudged by engagement rate when available — not a real market quote |
+| Completeness | % of the 7 scoring fields that had real data — a low number means the composite score is resting on fewer signals |
+| Related Links | Employer pages / bio-mentioned URLs, plus other-platform accounts once the same person is matched across platforms |
+
+**Two fields are intentionally always blank right now**: audience demographics and fake/inorganic-follower detection. No cheap way to compute these honestly exists in-house — the only real options are paid third-party Apify actors (researched, not yet wired up; ask if you want to revisit).
+
+---
+
+## Project layout
+
+```
+pipeline.py          CLI entrypoint
+apify_config.py       Apify token/client
+runner.py             starts an actor run, polls it live
+storage.py             saves results to results/<platform>.json
+scoring.py             the 8-signal scoring logic
+platforms/            one file per social network (actor ID, field mapping, engagement/links extraction)
+db/
+  01_schema.sql        staging + entities + entity_links
+  02_resolve.sql        cross-platform identity matching
+  04_scores.sql         entity_scores table
+  05_follower_history.sql   follower-count snapshots over time
+  connection.py         Postgres connection
+  loader.py              writes scrape results into staging + entities
+  run_scoring.py          computes scores for everyone in the DB
+  export_report.py         generates the HTML report
+  start_postgres.ps1        starts the local Postgres process
+web/                   the browser-based console (Flask)
+results/               raw JSON per scrape (gitignored)
+reports/                generated HTML reports (gitignored — contains real people's data)
+```

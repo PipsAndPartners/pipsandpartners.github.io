@@ -1,0 +1,153 @@
+<!--
+  Copyright (c) 2026 Khanh Vuong. All Rights Reserved.
+  This source is proprietary. See LICENSE.txt in the repository root.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="PipsAndPartners — learn to trade, then partner with TMGM as an Introducing Broker.">
+<title>PipsAndPartners</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="wrap nav-inner">
+    <div class="brand">Pips<span class="dot">&amp;</span>Partners</div>
+    <ul class="nav-links">
+      <li><a href="index.html" class="active">Home</a></li>
+      <li><a href="learn.html">Learn</a></li>
+      <li><a href="partner.html">Become an IB</a></li>
+      <li><a href="tools.html">Tools</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="http://127.0.0.1:5000" target="_blank" rel="noopener">Apify Staging</a></li>
+    </ul>
+    <a class="nav-cta" href="partner.html">Join →</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">TMGM Introducing Broker</p>
+    <h1 class="headline">Trade smarter. <em>Earn together.</em></h1>
+    <p class="sub">Learn the basics of trading, then partner with TMGM and earn commission for every trader you bring.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary" href="partner.html">Become a Partner →</a>
+      <a class="btn btn-ghost" href="learn.html">Start Learning</a>
+    </div>
+
+    <div class="ticker-wrap">
+      <div class="ticker-row">
+        <div class="ticker-readout"><span class="pair">EUR/USD</span> <span class="val" id="t1">1.0842</span> <span class="delta up" id="d1">+0.0006</span></div>
+        <div class="ticker-readout"><span class="pair">XAU/USD</span> <span class="val" id="t2">2,412.30</span> <span class="delta down" id="d2">−3.10</span></div>
+        <div class="ticker-readout"><span class="pair">AUD/USD</span> <span class="val" id="t3">0.6621</span> <span class="delta up" id="d3">+0.0011</span></div>
+      </div>
+      <svg id="spark" viewBox="0 0 1000 48" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#d6ae3f" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#d6ae3f" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path class="spark-fill" id="sparkFill" d=""></path>
+        <path class="spark-line" id="sparkLine" d=""></path>
+        <circle class="spark-dot" id="sparkDot" r="3" cx="0" cy="0"></circle>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight">
+  <div class="wrap">
+    <div class="cards3">
+      <div class="card">
+        <span class="icon">📘</span>
+        <h3>Learn</h3>
+        <p>Quick lessons on trading basics — no jargon.</p>
+        <a href="learn.html">Explore lessons →</a>
+      </div>
+      <div class="card">
+        <span class="icon">🤝</span>
+        <h3>Partner</h3>
+        <p>Refer traders to TMGM, earn commission.</p>
+        <a href="partner.html">See how it works →</a>
+      </div>
+      <div class="card">
+        <span class="icon">🧮</span>
+        <h3>Tools</h3>
+        <p>A simple pip value calculator.</p>
+        <a href="tools.html">Try the calculator →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section-tight">
+  <div class="wrap">
+    <div class="cta-banner">
+      <div>
+        <h2>Ready to partner?</h2>
+        <p>Register your interest and I'll follow up personally.</p>
+      </div>
+      <a class="btn btn-primary" href="partner.html">Get started →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p class="disclaimer">
+      <strong>Risk warning:</strong> Trading forex and CFDs carries a high level of risk and may not suit everyone. You could lose more than your initial deposit. Nothing here is financial advice — please read TMGM's PDS and FSG before trading.
+    </p>
+    <div class="foot-row">
+      <span>© 2026 PipsAndPartners</span>
+      <span>khanhvuong4923@gmail.com</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const line = document.getElementById('sparkLine');
+  const fill = document.getElementById('sparkFill');
+  const dot = document.getElementById('sparkDot');
+  const W = 1000, H = 48, N = 60;
+  let points = new Array(N).fill(H/2);
+  function step(){
+    const last = points[points.length-1];
+    let next = Math.max(6, Math.min(H-6, last + (Math.random()-0.5)*8));
+    points.push(next); points.shift();
+    draw();
+  }
+  function draw(){
+    let d='';
+    points.forEach((y,i)=>{ const x=(i/(N-1))*W; d += (i===0?'M':'L')+x.toFixed(1)+','+y.toFixed(1)+' '; });
+    line.setAttribute('d', d);
+    fill.setAttribute('d', d + `L${W},${H} L0,${H} Z`);
+    dot.setAttribute('cx', W); dot.setAttribute('cy', points[points.length-1]);
+  }
+  draw(); setInterval(step, 900);
+
+  const t1=document.getElementById('t1'), d1=document.getElementById('d1');
+  const t2=document.getElementById('t2'), d2=document.getElementById('d2');
+  const t3=document.getElementById('t3'), d3=document.getElementById('d3');
+  function tick(el, delEl, base, decimals, pip){
+    const change = (Math.random()-0.5)*pip*4;
+    const val = base + change;
+    el.textContent = val.toFixed(decimals);
+    const up = change >= 0;
+    delEl.textContent = (up?'+':'−') + Math.abs(change).toFixed(decimals);
+    delEl.className = 'delta ' + (up ? 'up' : 'down');
+    return val;
+  }
+  let v1=1.0842, v2=2412.30, v3=0.6621;
+  setInterval(()=>{ v1=tick(t1,d1,v1,4,0.0002); v2=tick(t2,d2,v2,2,0.5); v3=tick(t3,d3,v3,4,0.0002); }, 1600);
+})();
+</script>
+</body>
+</html>
