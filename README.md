@@ -11,7 +11,7 @@ partner with TMGM as an Introducing Broker.
 | `learn.html` | Three plain-language trading lessons |
 | `partner.html` | How the IB partnership works + register interest |
 | `tools.html` | Pip value calculator |
-| `about.html` | About Khanh |
+| `about.html` | About Guo |
 | `style.css` | Shared styles for every page |
 
 Plain HTML/CSS/JS — no build step. Open `index.html` in a browser, or serve the
@@ -40,15 +40,32 @@ running locally.
 
 ### The marketing site → GitHub Pages (free)
 
-The site is plain static files at the repo root, so GitHub Pages serves it as‑is:
+The site is plain static files at the repo root, so GitHub Pages serves it as‑is.
+Repo **Settings → Pages** → **Source:** *Deploy from a branch* → **Branch:** `main`,
+**folder:** `/ (root)` → Save. Live in ~1 min; every push to `main` redeploys.
+All internal links are relative, so the site works both at a project sub‑path and
+at a domain root.
 
-1. Push to GitHub (already done: `github.com/KhanhQuy/PipsAndPartners`).
-2. Repo **Settings → Pages**.
-3. **Source:** *Deploy from a branch*. **Branch:** `main`, **folder:** `/ (root)`. Save.
-4. After ~1 min the site is live at **https://khanhquy.github.io/PipsAndPartners/**.
+### Getting a clean `pipsandpartners.github.io` URL (no personal username)
 
-All links are relative, so they keep working under that sub‑path. Every push to
-`main` redeploys.
+A repo under a personal account is published as
+`https://<username>.github.io/<repo>/`, which exposes the username. To publish at
+`https://pipsandpartners.github.io/` instead, the site must live in an account or
+**organization literally named `pipsandpartners`**, in a repo named exactly
+`pipsandpartners.github.io`:
+
+1. Create a **free GitHub organization** named `PipsAndPartners`
+   (github.com → *Your organizations* → *New organization* → Free).
+2. In that org, create a repo named **`pipsandpartners.github.io`**.
+3. Push this code to it (`git remote set-url origin <new repo>` then
+   `git push -u origin main`), or transfer the existing repo into the org and
+   rename it to `pipsandpartners.github.io`.
+4. **Settings → Pages** → branch `main`, `/ (root)`. Site goes live at
+   `https://pipsandpartners.github.io/`.
+
+Best privacy/branding option: buy a domain (e.g. `pipsandpartners.com`), add a
+`CNAME` file with that domain, and point the DNS at GitHub Pages — visitors then
+never see any github.io URL.
 
 ### The Apify Staging app → NOT GitHub Pages
 
