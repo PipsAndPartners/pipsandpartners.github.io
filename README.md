@@ -87,7 +87,8 @@ classDiagram
     }
     class WebConsole {
         <<Flask app>>
-        +index()
+        +discovery_desk()
+        +apify_console()
         +start_run()
         +job_status()
     }
@@ -146,10 +147,14 @@ It's safe to run even if already running (just prints "accepting connections").
    .\.venv\Scripts\python.exe web\app.py
    ```
 3. Open **http://127.0.0.1:5000** in your browser.
-4. Pick a **platform** from the dropdown (linkedin / instagram / twitter / facebook / tiktok / douyin), or leave it on "custom" and type any Apify actor ID yourself.
-5. Edit the **Run Input JSON** if you want (search terms, usernames, max items, etc.) — it's pre-filled with a sensible default, or whatever you ran last time for that platform.
-6. Click **Run actor**. You'll see live status (`RUNNING - 12 items scraped so far...`) until it finishes.
-7. Results show as a table, save to `results/<platform>_results.json`, and (for the 6 built-in platforms) automatically load into Postgres too.
+4. The landing page is the **Discovery Desk** — a local-first workspace for importing public
+   profile exports (CSV), scoring them, and tracking review status. It stores leads only in your
+   browser's local storage. Use the **Apify console** tab (or go straight to
+   **http://127.0.0.1:5000/apify**) to run actors.
+5. On the Apify console, pick a **platform** from the dropdown (linkedin / instagram / twitter / facebook / tiktok / douyin), or leave it on "custom" and type any Apify actor ID yourself.
+6. Edit the **Run Input JSON** if you want (search terms, usernames, max items, etc.) — it's pre-filled with a sensible default, or whatever you ran last time for that platform.
+7. Click **Run actor**. You'll see live status (`RUNNING - 12 items scraped so far...`) until it finishes.
+8. Results show as a table, save to `results/<platform>_results.json`, and (for the 6 built-in platforms) automatically load into Postgres too.
 
 To stop the app, close its terminal / stop the background process.
 

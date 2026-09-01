@@ -32,6 +32,18 @@ body {
 h1 { margin: 0 0 0.25rem; }
 .subtitle { color: var(--muted); margin: 0 0 1.5rem; }
 
+.tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+.tabs .tab {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+.tabs .tab:hover { color: var(--text); }
+.tabs .tab.active { color: var(--accent); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
 .layout {
   display: grid;
   grid-template-columns: minmax(280px, 420px) 1fr;
