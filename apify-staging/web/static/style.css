@@ -7,9 +7,9 @@
   --text: #0f1e2b;
   --muted: #45596b;
   --navy: #0a2540;
-  --accent: #0a6ebd;
-  --accent-dk: #085a9c;
-  --accent-2: #5fb0ea;
+  --accent: #0b63b8;
+  --accent-dk: #0a5199;
+  --accent-2: #7cc3f2;
   --shadow: 0 1px 3px rgba(10,37,64,0.06), 0 10px 30px rgba(10,37,64,0.08);
 }
 
@@ -49,6 +49,17 @@ body {
   text-decoration: none;
 }
 .sh-link:hover { color: #fff; }
+.sh-login {
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid rgba(255,255,255,0.45);
+  border-radius: 6px;
+  transition: border-color .2s, background .2s;
+}
+.sh-login:hover { border-color: #fff; background: rgba(255,255,255,0.10); }
 .sh-cta {
   background: var(--accent);
   color: #fff;
@@ -118,7 +129,7 @@ button {
   color: white;
   cursor: pointer;
   transition: background .2s;
-  box-shadow: 0 6px 18px rgba(10,110,189,0.30);
+  box-shadow: 0 6px 18px rgba(11,99,184,0.30);
 }
 
 button:hover { background: var(--accent-dk); }
