@@ -87,13 +87,7 @@ def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: 
 
 
 @app.get("/")
-def discovery_desk():
-    """Main page: the local-first IB discovery / lead-review desk."""
-    return render_template("side_quest.html")
-
-
-@app.get("/apify")
-def apify_console():
+def index():
     presets = {name: {"actor_id": mod.ACTOR_ID, "default_input": mod.DEFAULT_INPUT} for name, mod in PLATFORMS.items()}
 
     saved = prefs.load()
