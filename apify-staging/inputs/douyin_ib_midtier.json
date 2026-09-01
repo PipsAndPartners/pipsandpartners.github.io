@@ -1,0 +1,11 @@
+{
+  "keywords": ["外汇交易", "黄金原油分析", "交易复盘", "日内交易", "外汇跟单"],
+  "maxResultsPerQuery": 50,
+  "sort": "general",
+  "publishTime": "half_year",
+  "duration": "unlimited",
+  "shouldDownloadVideos": false,
+  "shouldDownloadCovers": false,
+  "shouldDownloadSlideshowImages": false,
+  "videoKvStoreName": ""
+}
