@@ -8,4 +8,13 @@ Thumbs.db
 .vscode/
 .idea/
 
-# The apify-staging/ subproject keeps its own .gitignore
+# Third-party agent skills (caveman etc.) — local tooling, not site content
+.agents/
+.claude/
+skills-lock.json
+
+# The a-function/ subproject keeps its own .gitignore
+
+# Cloudflare Wrangler local cache/logs and generated deploy output
+.wrangler/
+dist/

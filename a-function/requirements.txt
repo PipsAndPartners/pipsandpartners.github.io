@@ -3,3 +3,4 @@ python-dotenv
 flask
 psycopg[binary]
 gunicorn
+cryptography

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Apify Scraper Console</title>
+  <title>A-function</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -11,12 +11,16 @@
     <a class="sh-brand" href="http://127.0.0.1:4173/index.html">Pips<span>&amp;</span>Partners</a>
     <nav class="sh-nav">
       <a class="sh-link" href="http://127.0.0.1:4173/index.html">&larr; Home</a>
-      <a class="sh-login" href="https://portal.tmgm.com/login" target="_blank" rel="noopener">Login</a>
-      <a class="sh-cta" href="https://portal.tmgm.com/register?sales=NzAwMV9QcmVjeVZ1b25n&amp;language=vi" target="_blank" rel="noopener">Register as IB</a>
+      {% if g.user.is_admin %}
+      <a class="sh-link" href="{{ url_for('admin_users') }}">Admin</a>
+      {% endif %}
+      <form class="inline" method="post" action="{{ url_for('logout') }}">
+        <button type="submit" class="sh-login" style="background:none;box-shadow:none">Log out ({{ g.user.username }})</button>
+      </form>
     </nav>
   </header>
 
-  <h1>Apify Scraper Console</h1>
+  <h1>A-function</h1>
   <p class="subtitle">Pick a saved platform preset or type any Apify actor ID and its JSON input, then run it live.</p>
 
   <div class="layout">

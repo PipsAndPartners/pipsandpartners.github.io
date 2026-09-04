@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin — A-function</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <a class="sh-brand" href="{{ url_for('index') }}">A-function</a>
+    <nav class="sh-nav">
+      <a class="sh-link" href="{{ url_for('index') }}">&larr; Console</a>
+      <form class="inline" method="post" action="{{ url_for('logout') }}">
+        <button type="submit" class="sh-login" style="background:none;box-shadow:none">Log out</button>
+      </form>
+    </nav>
+  </header>
+
+  <h1>Users</h1>
+
+  {% for message in get_flashed_messages() %}
+  <p style="color:#b00020">{{ message }}</p>
+  {% endfor %}
+
+  <div id="results-preview" class="table-wrap" style="margin-bottom:1.5rem">
+    <table>
+      <thead><tr><th>Username</th><th>Admin</th><th>Created</th><th></th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td>{{ u.username }}</td>
+          <td>{{ "yes" if u.is_admin else "" }}</td>
+          <td>{{ u.created_at.strftime("%Y-%m-%d") }}</td>
+          <td>
+            <form class="inline" method="post" action="{{ url_for('admin_delete_user', user_id=u.user_id) }}" onsubmit="return confirm('Delete ' + {{ u.username | tojson }} + '?')">
+              <button type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Add user</h2>
+  <form method="post" action="{{ url_for('admin_add_user') }}" style="max-width:420px">
+    <label>Username
+      <input type="text" name="username" required>
+    </label>
+    <label>Password
+      <input type="password" name="password" required>
+    </label>
+    <label>Apify API token
+      <input type="text" name="apify_token" required>
+    </label>
+    <label style="flex-direction:row;align-items:center;gap:0.5rem">
+      <input type="checkbox" name="is_admin" style="width:auto">
+      Admin (can manage users)
+    </label>
+    <button type="submit">Add user</button>
+  </form>
+</body>
+</html>

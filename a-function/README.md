@@ -153,7 +153,33 @@ It's safe to run even if already running (just prints "accepting connections").
 
 To stop the app, close its terminal / stop the background process.
 
-**Note:** this console has no login by default — fine on your own machine, but if you ever put it on the internet, set `WEB_USERNAME` / `WEB_PASSWORD` environment variables first (see `Procfile`/deployment notes), otherwise anyone with the link can run actors on your Apify account and spend your credits.
+**Login required.** Every route redirects to `/login` until you sign in — see "Web console login" below for one-time setup.
+
+---
+
+## Web console login
+
+Each person gets their own username/password + their own Apify API token — runs
+they start bill to their own token, not a shared one.
+
+One-time setup:
+1. Add schema: `.\.venv\Scripts\python.exe db\run_sql_file.py db\06_users.sql`
+2. Generate two secrets and put them in `.env`:
+   ```
+   python -c "import secrets; print(secrets.token_hex(32))"          # SECRET_KEY
+   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # TOKEN_ENC_KEY
+   ```
+3. Set `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_APIFY_TOKEN` in `.env`, then run:
+   ```
+   .\.venv\Scripts\python.exe db\seed_admin.py
+   ```
+4. Log in as that admin, then use **Admin** (top nav) to add/remove other users —
+   each gets their own password and their own Apify token, pasted in at creation
+   time. Tokens are encrypted at rest (`TOKEN_ENC_KEY`); losing that key makes
+   stored tokens unrecoverable, so back it up alongside `DATABASE_URL`.
+
+The CLI (`pipeline.py`, `db/*.py`) is unaffected — it keeps reading the shared
+`APIFY_TOKEN` from `.env` as before; only the web console is per-user.
 
 ---
 
@@ -226,12 +252,15 @@ db/
   02_resolve.sql        cross-platform identity matching
   04_scores.sql         entity_scores table
   05_follower_history.sql   follower-count snapshots over time
+  06_users.sql            app_users table (web console login)
+  seed_admin.py           one-time: creates the first admin user
   connection.py         Postgres connection
   loader.py              writes scrape results into staging + entities
   run_scoring.py          computes scores for everyone in the DB
   export_report.py         generates the HTML report
   start_postgres.ps1        starts the local Postgres process
 web/                   the browser-based console (Flask)
+  crypto_utils.py         encrypts/decrypts per-user Apify tokens at rest
 results/               raw JSON per scrape (gitignored)
 reports/                generated HTML reports (gitignored — contains real people's data)
 ```
