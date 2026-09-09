@@ -7,6 +7,9 @@ const statusLine = document.getElementById("status-line");
 const resultsPreview = document.getElementById("results-preview");
 const resultsMeta = document.getElementById("results-meta");
 const downloadLink = document.getElementById("download-link");
+const discoveryResults = document.getElementById("discovery-results");
+const discoveryDownload = document.getElementById("discovery-download");
+const discoveryTable = document.getElementById("discovery-table");
 
 const MAX_ROWS = 100;
 const MAX_CELL_LENGTH = 150;
@@ -148,6 +151,93 @@ function renderTable(items) {
       ? `Showing ${MAX_ROWS} of ${items.length} items (download for the full set).`
       : `${items.length} item${items.length === 1 ? "" : "s"}.`;
 }
+
+function renderDiscovery(items) {
+  discoveryResults.textContent = "";
+  if (!items.length) {
+    discoveryResults.textContent = "No matching channels or groups.";
+    return;
+  }
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  ["Name", "Handle", "Followers", "Profile"].forEach((label) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    head.appendChild(th);
+  });
+  const thead = document.createElement("thead");
+  thead.appendChild(head);
+  table.appendChild(thead);
+  const body = document.createElement("tbody");
+  items.forEach((item) => {
+    const row = document.createElement("tr");
+    const snippet = item.snippet || {};
+    const stats = item.statistics || {};
+    const name = snippet.title || item.title || "—";
+    const handle = snippet.customUrl || item.username || "—";
+    const followers = stats.subscriberCount || item.participants_count || "—";
+    [name, handle, Number(followers).toLocaleString()].forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = value;
+      row.appendChild(td);
+    });
+    const profile = item.id && item.kind === "youtube#channel"
+      ? `https://www.youtube.com/channel/${item.id}`
+      : item.username ? `https://t.me/${item.username}` : null;
+    row.appendChild(linkCell(profile, "View ↗"));
+    body.appendChild(row);
+  });
+  table.appendChild(body);
+  discoveryResults.appendChild(table);
+}
+
+document.querySelectorAll(".discovery-form").forEach((discoveryForm) => {
+  discoveryForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = discoveryForm.querySelector("button");
+    const status = discoveryForm.querySelector(".tool-status");
+    const source = discoveryForm.dataset.source;
+    const keyword = discoveryForm.elements.keyword.value.trim();
+    const follower = Number(discoveryForm.elements.follower.value || 0);
+    const location = discoveryForm.elements.location.value.trim();
+    const maxResults = Number(discoveryForm.elements.max_results.value || 10);
+    button.disabled = true;
+    status.textContent = "Starting...";
+    discoveryDownload.style.display = "none";
+    discoveryTable.style.display = "none";
+    try {
+      const response = await fetch("/api/discovery/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source, keyword, follower, location, max_results: maxResults }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || response.statusText);
+      const timer = setInterval(async () => {
+        const poll = await fetch(`/api/status/${data.job_id}`);
+        const state = await poll.json();
+        status.textContent = `${state.status} - ${state.item_count} result(s)`;
+        if (state.status === "SUCCEEDED" || state.status === "FAILED") {
+          clearInterval(timer);
+          button.disabled = false;
+          if (state.status === "FAILED") {
+            status.textContent = `Failed: ${state.error}`;
+            return;
+          }
+          const result = await (await fetch(`/api/result/${data.job_id}`)).json();
+          renderDiscovery(result.items || []);
+          discoveryDownload.href = `/api/download/${data.job_id}`;
+          discoveryDownload.style.display = "inline-block";
+          discoveryTable.href = `/api/table/${data.job_id}`;
+          discoveryTable.style.display = "inline-block";
+        }
+      }, 1500);
+    } catch (error) {
+      status.textContent = `Failed: ${error.message}`;
+      button.disabled = false;
+    }
+  });
+});
 
 let pollTimer = null;
 

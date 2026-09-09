@@ -1,8 +1,10 @@
 """Web console: pick/type an Apify actor ID and JSON input, run it, watch it live."""
 
 import functools
+import asyncio
 import json
 import os
+import re
 import sys
 import threading
 import uuid
@@ -22,6 +24,10 @@ from runner import run_actor_live
 from storage import save_items
 from web import prefs
 from web.crypto_utils import decrypt_token, encrypt_token
+from web.json_to_table import render as render_json_table
+from discovery.keyword_campaign import search_telegram_entities
+from discovery.telegram.client import Settings, build_client
+from discovery.youtube_data_api import discover as discover_youtube
 
 app = Flask(__name__)
 try:
@@ -134,7 +140,11 @@ def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: 
 
 @app.get("/")
 def index():
-    presets = {name: {"actor_id": mod.ACTOR_ID, "default_input": mod.DEFAULT_INPUT} for name, mod in PLATFORMS.items()}
+    presets = {
+        name: {"actor_id": mod.ACTOR_ID, "default_input": mod.DEFAULT_INPUT}
+        for name, mod in PLATFORMS.items()
+        if hasattr(mod, "ACTOR_ID") and hasattr(mod, "DEFAULT_INPUT")
+    }
 
     saved = prefs.load()
     last_platform = saved.get("last_platform", "")
@@ -202,6 +212,7 @@ def job_status(job_id: str):
         item_count=job.get("item_count", 0),
         error=job.get("error"),
         db_status=job.get("db_status"),
+        source=job.get("source"),
     )
 
 
@@ -233,6 +244,125 @@ def job_download(job_id: str):
     if not job or "output_path" not in job:
         return jsonify(error="file not ready"), 409
     return send_file(job["output_path"], as_attachment=True)
+
+
+@app.get("/api/table/<job_id>")
+def job_table(job_id: str):
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+    if not job or "table_path" not in job:
+        return jsonify(error="table not ready"), 409
+    return send_file(job["table_path"])
+
+
+LOCATION_ALIASES = {
+    "vietnam": ("vietnam", "viet nam", "việt nam", "vn", "hà nội", "ho chi minh", "sài gòn"),
+    "vn": ("vietnam", "viet nam", "việt nam", "vn", "hà nội", "ho chi minh", "sài gòn"),
+    "australia": ("australia", "australian", "úc", "uc", "sydney", "melbourne", "brisbane", "perth"),
+    "my": ("usa", "us", "united states", "america", "mỹ", "my", "new york", "california", "texas"),
+    "us": ("usa", "us", "united states", "america", "mỹ", "my", "new york", "california", "texas"),
+    "uk": ("uk", "united kingdom", "british", "anh", "england", "london", "manchester"),
+    "canada": ("canada", "canadian", "toronto", "vancouver"),
+}
+
+
+def _location_match(text: str, location: str) -> bool:
+    location = location.strip().casefold()
+    if not location or location in {"all", "any", "tất cả"}:
+        return True
+    terms = LOCATION_ALIASES.get(location, (location,))
+    text = text.casefold()
+    return any(re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text) for term in terms)
+
+
+def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, location: str, max_results: int) -> None:
+    try:
+        if source == "youtube":
+            result = discover_youtube([keyword], max_results=50)
+            items = [
+                item for item in result["items"]
+                if int(item.get("statistics", {}).get("subscriberCount", 0)) >= follower
+                and _location_match(
+                    " ".join((
+                        item.get("snippet", {}).get("title", ""),
+                        item.get("snippet", {}).get("description", ""),
+                        item.get("snippet", {}).get("country", ""),
+                        item.get("brandingSettings", {}).get("channel", {}).get("country", ""),
+                    )),
+                    location,
+                )
+            ][:max_results]
+            result["items"] = items
+            result["filter"] = {"keyword": keyword, "follower_min": follower, "location": location, "max_results": max_results}
+            output = Path(__file__).resolve().parent.parent / "results" / "youtube_ui_discovery.json"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            table_output = output.with_suffix(".html")
+            table_output.write_text(render_json_table(result, f"YouTube discovery: {keyword}"), encoding="utf-8")
+            db_status = None
+            try:
+                conn = get_conn()
+                try:
+                    loaded = load_platform_results(conn, "youtube", items)
+                finally:
+                    conn.close()
+                db_status = f"loaded {loaded} into Postgres"
+            except Exception as exc:
+                db_status = f"Postgres load skipped: {exc}"
+        else:
+            async def collect() -> list[dict]:
+                candidates = await search_telegram_entities([keyword], 50)
+                settings = Settings.from_env()
+                results = []
+                async with build_client(settings) as client:
+                    for candidate in candidates:
+                        try:
+                            entity = await client.get_entity(candidate.get("username") or candidate["platform_id"])
+                            from telethon.tl.functions.channels import GetFullChannelRequest
+                            full = await client(GetFullChannelRequest(entity))
+                            count = getattr(getattr(full, "full_chat", None), "participants_count", None) or 0
+                            searchable = " ".join((candidate.get("title", ""), candidate.get("username", ""), " ".join(candidate.get("keywords", []))))
+                            if count >= follower and _location_match(searchable, location):
+                                results.append({**candidate, "participants_count": count})
+                                if len(results) >= max_results:
+                                    break
+                        except Exception:
+                            continue
+                return results
+            items = asyncio.run(collect())
+            result = {"source": "telegram", "keyword": keyword, "follower_min": follower, "location": location, "max_results": max_results, "items": items}
+            output = Path(__file__).resolve().parent.parent / "results" / "telegram_ui_discovery.json"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            table_output = output.with_suffix(".html")
+            table_output.write_text(render_json_table(result, f"Telegram discovery: {keyword}"), encoding="utf-8")
+            db_status = None
+
+        with JOBS_LOCK:
+            JOBS[job_id].update(status="SUCCEEDED", items=items, item_count=len(items), output_path=str(output), table_path=str(table_output), db_status=db_status, source=source)
+    except Exception as exc:
+        with JOBS_LOCK:
+            JOBS[job_id].update(status="FAILED", error=str(exc))
+
+
+@app.post("/api/discovery/run")
+def start_discovery():
+    data = request.get_json(force=True, silent=True) or {}
+    source = (data.get("source") or "").strip().lower()
+    keyword = (data.get("keyword") or "").strip()
+    location = (data.get("location") or "").strip()
+    try:
+        follower = max(0, int(data.get("follower", 0)))
+        max_results = min(500, max(1, int(data.get("max_results", 10))))
+    except (TypeError, ValueError):
+        return jsonify(error="follower must be a number"), 400
+    if source not in {"telegram", "youtube"} or not keyword:
+        return jsonify(error="source and keyword are required"), 400
+    job_id = uuid.uuid4().hex[:12]
+    with JOBS_LOCK:
+        JOBS[job_id] = {"status": "STARTING", "item_count": 0, "source": source}
+    threading.Thread(target=_run_discovery_job, args=(job_id, source, keyword, follower, location, max_results), daemon=True).start()
+    return jsonify(job_id=job_id)
 
 
 @app.get("/admin")

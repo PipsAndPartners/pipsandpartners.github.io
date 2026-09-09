@@ -126,6 +126,7 @@ If you ever need to reapply the schema from scratch:
 .\.venv\Scripts\python.exe db\run_sql_file.py db\01_schema.sql
 .\.venv\Scripts\python.exe db\run_sql_file.py db\04_scores.sql
 .\.venv\Scripts\python.exe db\run_sql_file.py db\05_follower_history.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\07_staging_telegram.sql
 ```
 
 ### Starting Postgres
@@ -135,6 +136,44 @@ Postgres runs as a plain background process here (not a Windows service, since t
 .\db\start_postgres.ps1
 ```
 It's safe to run even if already running (just prints "accepting connections").
+
+## Telegram discovery worker
+
+Telegram discovery is a separate async worker. It reads public channels/groups only,
+does not join private links or fetch participants, and resumes its bounded frontier
+from `.telegram_frontier.json` after an interrupted run.
+
+1. Create `api_id` and `api_hash` at `my.telegram.org` using a dedicated secondary number.
+2. Set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` locally, then create the session:
+    `\.\.venv\Scripts\python.exe telegram_auth_setup.py`
+    If the terminal is inconvenient, launch `telegram_auth_gui.py` instead and enter the OTP in its local window.
+3. Store the printed `TELEGRAM_SESSION` as a secret. Set `TELEGRAM_SEEDS` to comma-separated public usernames/`t.me` links and `DATABASE_URL`.
+4. Run from `a-function`:
+    `\.\.venv\Scripts\python.exe -m discovery.telegram.crawl`
+
+Optional limits are `TELEGRAM_MAX_DEPTH`, `TELEGRAM_MAX_CHANNELS_PER_RUN`,
+`TELEGRAM_MSG_SCAN_LIMIT`, `TELEGRAM_FLOOD_ABORT_SECONDS`, and `TELEGRAM_MIN_SLEEP`.
+Export staging rows as JSONL and compare them with `scripts/telegram_coverage_report.py`.
+
+## YouTube Data API v3 discovery
+
+YouTube discovery uses Google's Data API directly, not Apify. Add a restricted
+API key with **YouTube Data API v3** enabled to `.env`:
+
+```text
+YOUTUBE_API_KEY=your_key_here
+```
+
+Run a keyword search:
+
+```powershell
+.\.venv\Scripts\python.exe -m discovery.youtube_data_api "forex Việt Nam" "đào tạo IB" --max-results 25
+```
+
+`search.list` costs 100 quota units per keyword and `channels.list` costs 1
+unit per batch of up to 50 channels. Raw results are saved to
+`staging_youtube`, mapped to `entities`, and the result JSON records
+`quota_units`. Tests mock the API and consume no Google quota.
 
 ---
 

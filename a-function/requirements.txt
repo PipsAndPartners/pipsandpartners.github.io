@@ -4,3 +4,4 @@ flask
 psycopg[binary]
 gunicorn
 cryptography
+telethon

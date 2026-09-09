@@ -23,6 +23,55 @@
   <h1>A-function</h1>
   <p class="subtitle">Pick a saved platform preset or type any Apify actor ID and its JSON input, then run it live.</p>
 
+  <section class="discovery-tools">
+    <div class="tool-heading">
+      <div>
+        <span class="eyebrow">Discovery</span>
+        <h2>Find finance leads by keyword</h2>
+      </div>
+      <span class="tool-note">Telegram session and YouTube Data API key stay local.</span>
+    </div>
+    <div class="discovery-grid">
+      <form class="discovery-form" data-source="telegram">
+        <h3>Telegram</h3>
+        <label>Keyword
+          <input name="keyword" value="forex Việt Nam" required>
+        </label>
+        <label>Minimum members
+          <input name="follower" type="number" min="0" value="10000" required>
+        </label>
+        <label>Location
+          <input name="location" placeholder="Australia, Mỹ, UK or all" value="all">
+        </label>
+        <label>Max results
+          <input name="max_results" type="number" min="1" max="500" value="10" required>
+        </label>
+        <button type="submit">Search Telegram</button>
+        <p class="tool-status" aria-live="polite">Ready.</p>
+      </form>
+      <form class="discovery-form" data-source="youtube">
+        <h3>YouTube</h3>
+        <label>Keyword
+          <input name="keyword" value="người Việt trading forex" required>
+        </label>
+        <label>Minimum subscribers
+          <input name="follower" type="number" min="0" value="1000" required>
+        </label>
+        <label>Location
+          <input name="location" placeholder="Australia, Mỹ, UK or all" value="all">
+        </label>
+        <label>Max results
+          <input name="max_results" type="number" min="1" max="500" value="10" required>
+        </label>
+        <button type="submit">Search YouTube</button>
+        <p class="tool-status" aria-live="polite">Ready.</p>
+      </form>
+    </div>
+    <div id="discovery-results" class="table-wrap"></div>
+    <a id="discovery-download" style="display:none">Download discovery JSON</a>
+    <a id="discovery-table" style="display:none" target="_blank" rel="noopener">Open as table</a>
+  </section>
+
   <div class="layout">
     <form id="run-form">
       <label>Social media / platform

@@ -1,5 +1,8 @@
 .venv/
 .env
+.env.telegram.local
+.youtube_api_key.env
+.telegram_frontier.json
 results/
 reports/
 __pycache__/

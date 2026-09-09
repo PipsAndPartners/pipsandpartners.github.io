@@ -78,6 +78,29 @@ body {
 h1 { margin: 0 0 0.25rem; color: var(--navy); }
 .subtitle { color: var(--muted); margin: 0 0 1.5rem; }
 
+.discovery-tools {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.tool-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
+.tool-heading h2 { margin: 0.15rem 0 1rem; color: var(--navy); }
+.eyebrow { color: var(--accent); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.tool-note { color: var(--muted); font-size: 0.8rem; }
+.discovery-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 1rem; }
+.discovery-form { padding: 1rem; background: var(--panel-2); box-shadow: none; }
+.discovery-form h3 { margin-top: 0; color: var(--navy); }
+.tool-status { min-height: 1.1rem; color: var(--muted); font-size: 0.82rem; }
+#discovery-results { margin-top: 1rem; max-height: 36vh; overflow: auto; }
+#discovery-download { display: inline-block; margin-top: 0.75rem; color: var(--accent); font-weight: 600; }
+@media (max-width: 800px) {
+  .discovery-grid { grid-template-columns: 1fr; }
+  .tool-heading { display: block; }
+}
+
 .layout {
   display: grid;
   grid-template-columns: minmax(280px, 420px) 1fr;

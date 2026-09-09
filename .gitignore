@@ -18,3 +18,4 @@ skills-lock.json
 # Cloudflare Wrangler local cache/logs and generated deploy output
 .wrangler/
 dist/
+.telegram_frontier.json

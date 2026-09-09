@@ -44,8 +44,13 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
         raise ValueError(f"platforms.{platform} has no to_entity() mapping yet")
 
     staging_table = sql.Identifier(f"staging_{platform}")
+    staging_columns = "platform_id, raw, source_url, run_id"
+    staging_values = "%s, %s, %s, %s"
+    if platform == "youtube":
+        staging_columns += ", quota_units"
+        staging_values += ", %s"
     insert_staging = sql.SQL(
-        "INSERT INTO {} (platform_id, raw, source_url, run_id) VALUES (%s, %s, %s, %s)"
+        "INSERT INTO {} (" + staging_columns + ") VALUES (" + staging_values + ")"
     ).format(staging_table)
 
     loaded = 0
@@ -56,7 +61,10 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
             if not platform_id:
                 continue  # can't identify this row without a stable platform id
 
-            cur.execute(insert_staging, (platform_id, Jsonb(item), entity.get("source_url"), run_id))
+            staging_params = (platform_id, Jsonb(item), entity.get("source_url"), run_id)
+            if platform == "youtube":
+                staging_params += (item.get("quota_units"),)
+            cur.execute(insert_staging, staging_params)
             cur.execute(
                 UPSERT_ENTITY,
                 (
