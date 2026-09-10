@@ -2,6 +2,7 @@
 .env
 .env.telegram.local
 .youtube_api_key.env
+.x_api_key.env
 .telegram_frontier.json
 results/
 reports/

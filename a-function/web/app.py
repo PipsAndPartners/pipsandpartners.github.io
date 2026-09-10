@@ -27,7 +27,10 @@ from web.crypto_utils import decrypt_token, encrypt_token
 from web.json_to_table import render as render_json_table
 from discovery.keyword_campaign import search_telegram_entities
 from discovery.telegram.client import Settings, build_client
-from discovery.youtube_data_api import discover as discover_youtube
+from discovery.youtube_data_api import FINANCE_SIGNAL, discover as discover_youtube
+from discovery.x_api import discover as discover_x
+from discovery.common.contacts import extract_contacts
+from web.xlsx_export import build as build_xlsx
 
 app = Flask(__name__)
 try:
@@ -102,7 +105,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: str, apify_token: str) -> None:
+def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: str, apify_token: str, exclude_seen: bool = False) -> None:
     def on_progress(status: str, item_count: int) -> None:
         with JOBS_LOCK:
             JOBS[job_id]["status"] = status
@@ -111,6 +114,11 @@ def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: 
     try:
         client = get_client(apify_token)
         items = run_actor_live(client, label, actor_id, run_input, poll_seconds=3.0, on_progress=on_progress)
+        skipped_seen = 0
+        if exclude_seen:
+            kept = _drop_seen_items(platform, items)
+            skipped_seen = len(items) - len(kept)
+            items = kept
         out_path = save_items(label, items)
 
         db_status = None
@@ -124,6 +132,9 @@ def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: 
                 db_status = f"loaded {loaded} into Postgres"
             except Exception as exc:  # noqa: BLE001 - DB is optional, JSON file already saved above
                 db_status = f"Postgres load skipped: {exc}"
+
+        if skipped_seen:
+            db_status = f"{db_status}; skipped {skipped_seen} already-seen" if db_status else f"skipped {skipped_seen} already-seen"
 
         with JOBS_LOCK:
             JOBS[job_id].update(
@@ -171,6 +182,7 @@ def index():
         selected_platform=last_platform,
         initial_actor_id=initial_actor_id,
         initial_run_input_json=json.dumps(initial_run_input, ensure_ascii=False, indent=2) if initial_run_input else "",
+        location_options=LOCATION_OPTIONS,
     )
 
 
@@ -180,6 +192,7 @@ def start_run():
     actor_id = (data.get("actor_id") or "").strip()
     run_input = data.get("run_input")
     platform = (data.get("platform") or "custom").strip() or "custom"
+    exclude_seen = bool(data.get("exclude_seen", False))
 
     if not actor_id:
         return jsonify(error="actor_id is required"), 400
@@ -196,7 +209,7 @@ def start_run():
         JOBS[job_id] = {"status": "STARTING", "item_count": 0, "actor_id": actor_id, "label": label, "platform": platform}
 
     apify_token = decrypt_token(g.user["apify_token_encrypted"])
-    thread = threading.Thread(target=_run_job, args=(job_id, actor_id, run_input, label, platform, apify_token), daemon=True)
+    thread = threading.Thread(target=_run_job, args=(job_id, actor_id, run_input, label, platform, apify_token, exclude_seen), daemon=True)
     thread.start()
     return jsonify(job_id=job_id)
 
@@ -234,7 +247,27 @@ def job_result(job_id: str):
             except Exception:  # noqa: BLE001 - a bad row shouldn't blank the whole preview
                 continue
 
-    return jsonify(items=items, entities=entities)
+    return jsonify(items=items, entities=entities, contacts=job.get("contacts"))
+
+
+@app.get("/api/discovery/<job_id>/export.xlsx")
+def discovery_export_xlsx(job_id: str):
+    with JOBS_LOCK:
+        job = JOBS.get(job_id)
+    if not job or not job.get("contacts"):
+        return jsonify(error="no contacts to export"), 409
+    headers = [
+        ("name", "Channel"), ("youtube", "YouTube"), ("facebook", "Facebook"),
+        ("email", "Email"), ("zalo", "Zalo"), ("phone", "Phone"),
+        ("tiktok", "TikTok"), ("instagram", "Instagram"), ("telegram", "Telegram"), ("x", "X"),
+    ]
+    buffer = build_xlsx(job["contacts"], headers, title="YouTube contacts")
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"youtube_contacts_{job_id}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.get("/api/download/<job_id>")
@@ -255,45 +288,153 @@ def job_table(job_id: str):
     return send_file(job["table_path"])
 
 
+# YouTube "Location" dropdown: big markets + countries with a dense forex-IB scene.
+# Japan is intentionally left out. Values are ISO 3166-1 alpha-2 (lowercase) so they can be
+# matched exactly against a channel's declared country (see _location_match).
+LOCATION_OPTIONS = [
+    ("all", "All countries"),
+    ("vn", "Vietnam"),
+    ("au", "Australia"),
+    ("us", "United States"),
+    ("gb", "United Kingdom"),
+    ("ca", "Canada"),
+    ("de", "Germany"),
+    ("fr", "France"),
+    ("es", "Spain"),
+    ("tr", "Turkey"),
+    ("ae", "United Arab Emirates"),
+    ("in", "India"),
+    ("pk", "Pakistan"),
+    ("bd", "Bangladesh"),
+    ("id", "Indonesia"),
+    ("my", "Malaysia"),
+    ("ph", "Philippines"),
+    ("th", "Thailand"),
+    ("sg", "Singapore"),
+    ("cn", "China"),
+    ("kr", "South Korea"),
+    ("ng", "Nigeria"),
+    ("za", "South Africa"),
+    ("ke", "Kenya"),
+    ("eg", "Egypt"),
+    ("br", "Brazil"),
+    ("mx", "Mexico"),
+]
+
+# Fuzzy fallback terms per country code, matched against a channel's title + description
+# when it has no declared country. No bare 2-letter codes here (they match common words).
 LOCATION_ALIASES = {
-    "vietnam": ("vietnam", "viet nam", "việt nam", "vn", "hà nội", "ho chi minh", "sài gòn"),
-    "vn": ("vietnam", "viet nam", "việt nam", "vn", "hà nội", "ho chi minh", "sài gòn"),
-    "australia": ("australia", "australian", "úc", "uc", "sydney", "melbourne", "brisbane", "perth"),
-    "my": ("usa", "us", "united states", "america", "mỹ", "my", "new york", "california", "texas"),
-    "us": ("usa", "us", "united states", "america", "mỹ", "my", "new york", "california", "texas"),
-    "uk": ("uk", "united kingdom", "british", "anh", "england", "london", "manchester"),
-    "canada": ("canada", "canadian", "toronto", "vancouver"),
+    "vn": ("vietnam", "viet nam", "việt nam", "người việt", "hà nội", "hanoi", "ho chi minh", "sài gòn", "saigon"),
+    "au": ("australia", "australian", "úc", "sydney", "melbourne", "brisbane", "perth", "adelaide"),
+    "us": ("usa", "u.s.a", "united states", "america", "american", "mỹ", "new york", "los angeles", "california", "texas", "florida"),
+    "gb": ("uk", "united kingdom", "britain", "british", "england", "scotland", "wales", "london", "manchester", "anh quốc"),
+    "ca": ("canada", "canadian", "toronto", "vancouver", "montreal", "calgary", "ontario"),
+    "de": ("germany", "german", "deutschland", "berlin", "munich", "münchen", "hamburg", "frankfurt"),
+    "fr": ("france", "french", "français", "paris", "lyon", "marseille"),
+    "es": ("spain", "spanish", "españa", "madrid", "barcelona", "valencia", "sevilla"),
+    "tr": ("turkey", "türkiye", "turkish", "istanbul", "ankara", "izmir"),
+    "ae": ("uae", "united arab emirates", "emirates", "dubai", "abu dhabi", "sharjah"),
+    "in": ("india", "indian", "bharat", "mumbai", "delhi", "bengaluru", "bangalore", "hyderabad", "chennai", "kolkata"),
+    "pk": ("pakistan", "pakistani", "karachi", "lahore", "islamabad", "rawalpindi"),
+    "bd": ("bangladesh", "bangladeshi", "dhaka", "chittagong", "chattogram"),
+    "id": ("indonesia", "indonesian", "bahasa indonesia", "jakarta", "surabaya", "bandung", "medan"),
+    "my": ("malaysia", "malaysian", "kuala lumpur", "penang", "johor bahru", "selangor"),
+    "ph": ("philippines", "filipino", "pinoy", "manila", "cebu", "davao", "quezon city"),
+    "th": ("thailand", "thai", "bangkok", "chiang mai", "phuket"),
+    "sg": ("singapore", "singaporean"),
+    "cn": ("china", "chinese", "mainland china", "beijing", "shanghai", "shenzhen", "guangzhou"),
+    "kr": ("korea", "south korea", "korean", "seoul", "busan", "incheon"),
+    "ng": ("nigeria", "nigerian", "naija", "lagos", "abuja", "port harcourt", "ibadan"),
+    "za": ("south africa", "south african", "johannesburg", "cape town", "durban", "pretoria"),
+    "ke": ("kenya", "kenyan", "nairobi", "mombasa", "kisumu"),
+    "eg": ("egypt", "egyptian", "cairo", "alexandria", "giza"),
+    "br": ("brazil", "brasil", "brazilian", "são paulo", "sao paulo", "rio de janeiro", "belo horizonte"),
+    "mx": ("mexico", "méxico", "mexican", "mexicano", "ciudad de méxico", "guadalajara", "monterrey"),
 }
+LOCATION_ALIASES["uk"] = LOCATION_ALIASES["gb"]  # keep the free-text Telegram/X box working
 
 
-def _location_match(text: str, location: str) -> bool:
+def _location_match(text: str, location: str, *, country_code: str = "") -> bool:
     location = location.strip().casefold()
     if not location or location in {"all", "any", "tất cả"}:
+        return True
+    if country_code.strip().casefold() == location:  # channel's own declared country
         return True
     terms = LOCATION_ALIASES.get(location, (location,))
     text = text.casefold()
     return any(re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text) for term in terms)
 
 
-def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, location: str, max_results: int) -> None:
+def _seen_platform_ids(platform: str) -> set[str]:
+    """platform_ids already stored by earlier discovery runs. Best-effort: empty set if Postgres is down."""
+    try:
+        conn = get_conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT platform_id FROM entities WHERE platform = %s", (platform,))
+                return {row[0] for row in cur.fetchall()}
+        finally:
+            conn.close()
+    except Exception:  # noqa: BLE001 - dedup is optional, discovery still runs without it
+        return set()
+
+
+def _drop_seen_items(platform: str, items: list[dict]) -> list[dict]:
+    """Filter out items whose entity was already stored by an earlier run."""
+    module = PLATFORMS.get(platform)
+    if not module or not hasattr(module, "to_entity"):
+        return items
+    seen = _seen_platform_ids(platform)
+    if not seen:
+        return items
+    kept = []
+    for item in items:
+        try:
+            platform_id = module.to_entity(item).get("platform_id")
+        except Exception:  # noqa: BLE001 - a malformed row just doesn't get deduped
+            platform_id = None
+        if not platform_id or platform_id not in seen:
+            kept.append(item)
+    return kept
+
+
+def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, follower_max: int | None, location: str, max_results: int, exclude_seen: bool = False) -> None:
+    contacts = None
     try:
         if source == "youtube":
             result = discover_youtube([keyword], max_results=50)
+            seen = _seen_platform_ids("youtube") if exclude_seen else set()
             items = [
                 item for item in result["items"]
-                if int(item.get("statistics", {}).get("subscriberCount", 0)) >= follower
+                if item.get("id") not in seen
+                and int(item.get("statistics", {}).get("subscriberCount", 0)) >= follower
+                and (follower_max is None or int(item.get("statistics", {}).get("subscriberCount", 0)) <= follower_max)
                 and _location_match(
                     " ".join((
                         item.get("snippet", {}).get("title", ""),
                         item.get("snippet", {}).get("description", ""),
-                        item.get("snippet", {}).get("country", ""),
-                        item.get("brandingSettings", {}).get("channel", {}).get("country", ""),
                     )),
                     location,
+                    country_code=item.get("snippet", {}).get("country", "")
+                    or item.get("brandingSettings", {}).get("channel", {}).get("country", ""),
+                )
+                and any(
+                    signal in (item.get("snippet", {}).get("title", "") + " " + item.get("snippet", {}).get("description", "")).casefold()
+                    for signal in (*FINANCE_SIGNAL, keyword.casefold())
                 )
             ][:max_results]
             result["items"] = items
-            result["filter"] = {"keyword": keyword, "follower_min": follower, "location": location, "max_results": max_results}
+            result["filter"] = {"keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results, "exclude_seen": exclude_seen}
+            contacts = []
+            for item in items:
+                channel_id = item.get("id")
+                snippet = item.get("snippet", {})
+                contacts.append({
+                    "name": snippet.get("title", ""),
+                    **extract_contacts(snippet.get("description")),
+                    "youtube": f"https://www.youtube.com/channel/{channel_id}" if channel_id else "",
+                })
+            result["contacts"] = contacts
             output = Path(__file__).resolve().parent.parent / "results" / "youtube_ui_discovery.json"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -309,37 +450,107 @@ def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, lo
                 db_status = f"loaded {loaded} into Postgres"
             except Exception as exc:
                 db_status = f"Postgres load skipped: {exc}"
-        else:
+        elif source == "x":
+            result = discover_x([keyword], max_results=50)
+            seen = _seen_platform_ids("twitter") if exclude_seen else set()
+            items = [
+                item for item in result["items"]
+                if (item.get("username") or item.get("id")) not in seen
+                and int(item.get("public_metrics", {}).get("followers_count", 0)) >= follower
+                and (follower_max is None or int(item.get("public_metrics", {}).get("followers_count", 0)) <= follower_max)
+                and _location_match(
+                    " ".join((item.get("description") or "", item.get("location") or "")),
+                    location,
+                )
+                and any(
+                    signal in ((item.get("description") or "") + " " + (item.get("location") or "")).casefold()
+                    for signal in (*FINANCE_SIGNAL, keyword.casefold())
+                )
+            ][:max_results]
+            result["items"] = items
+            result["filter"] = {"keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results, "exclude_seen": exclude_seen}
+            contacts = []
+            for item in items:
+                username = item.get("username")
+                contacts.append({
+                    "name": item.get("name", ""),
+                    **extract_contacts(item.get("description")),
+                    "x": f"https://x.com/{username}" if username else "",
+                })
+            result["contacts"] = contacts
+            output = Path(__file__).resolve().parent.parent / "results" / "x_ui_discovery.json"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            table_output = output.with_suffix(".html")
+            table_output.write_text(render_json_table(result, f"X discovery: {keyword}"), encoding="utf-8")
+            db_status = None
+            try:
+                conn = get_conn()
+                try:
+                    loaded = load_platform_results(conn, "twitter", items)
+                finally:
+                    conn.close()
+                db_status = f"loaded {loaded} into Postgres"
+            except Exception as exc:
+                db_status = f"Postgres load skipped: {exc}"
+        elif source == "telegram":
+            seen = _seen_platform_ids("telegram") if exclude_seen else set()
             async def collect() -> list[dict]:
                 candidates = await search_telegram_entities([keyword], 50)
                 settings = Settings.from_env()
                 results = []
                 async with build_client(settings) as client:
                     for candidate in candidates:
+                        if str(candidate.get("platform_id")) in seen:
+                            continue
                         try:
                             entity = await client.get_entity(candidate.get("username") or candidate["platform_id"])
                             from telethon.tl.functions.channels import GetFullChannelRequest
                             full = await client(GetFullChannelRequest(entity))
                             count = getattr(getattr(full, "full_chat", None), "participants_count", None) or 0
-                            searchable = " ".join((candidate.get("title", ""), candidate.get("username", ""), " ".join(candidate.get("keywords", []))))
-                            if count >= follower and _location_match(searchable, location):
-                                results.append({**candidate, "participants_count": count})
+                            about = getattr(getattr(full, "full_chat", None), "about", "") or ""
+                            searchable = " ".join((candidate.get("title", ""), candidate.get("username", ""), " ".join(candidate.get("keywords", [])), about))
+                            if (
+                                count >= follower
+                                and (follower_max is None or count <= follower_max)
+                                and _location_match(searchable, location)
+                                and any(signal in searchable.casefold() for signal in (*FINANCE_SIGNAL, keyword.casefold()))
+                            ):
+                                results.append({**candidate, "participants_count": count, "about": about})
                                 if len(results) >= max_results:
                                     break
                         except Exception:
                             continue
                 return results
             items = asyncio.run(collect())
-            result = {"source": "telegram", "keyword": keyword, "follower_min": follower, "location": location, "max_results": max_results, "items": items}
+            result = {"source": "telegram", "keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results, "exclude_seen": exclude_seen, "items": items}
+            contacts = []
+            for item in items:
+                username = item.get("username")
+                contacts.append({
+                    "name": item.get("title", ""),
+                    **extract_contacts(item.get("about")),
+                    "telegram": f"https://t.me/{username}" if username else "",
+                })
+            result["contacts"] = contacts
             output = Path(__file__).resolve().parent.parent / "results" / "telegram_ui_discovery.json"
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
             table_output = output.with_suffix(".html")
             table_output.write_text(render_json_table(result, f"Telegram discovery: {keyword}"), encoding="utf-8")
             db_status = None
+            try:
+                conn = get_conn()
+                try:
+                    loaded = load_platform_results(conn, "telegram", items)
+                finally:
+                    conn.close()
+                db_status = f"loaded {loaded} into Postgres"
+            except Exception as exc:
+                db_status = f"Postgres load skipped: {exc}"
 
         with JOBS_LOCK:
-            JOBS[job_id].update(status="SUCCEEDED", items=items, item_count=len(items), output_path=str(output), table_path=str(table_output), db_status=db_status, source=source)
+            JOBS[job_id].update(status="SUCCEEDED", items=items, contacts=contacts, item_count=len(items), output_path=str(output), table_path=str(table_output), db_status=db_status, source=source)
     except Exception as exc:
         with JOBS_LOCK:
             JOBS[job_id].update(status="FAILED", error=str(exc))
@@ -351,17 +562,22 @@ def start_discovery():
     source = (data.get("source") or "").strip().lower()
     keyword = (data.get("keyword") or "").strip()
     location = (data.get("location") or "").strip()
+    exclude_seen = bool(data.get("exclude_seen", False))
     try:
         follower = max(0, int(data.get("follower", 0)))
+        follower_max = data.get("follower_max")
+        follower_max = int(follower_max) if follower_max not in (None, "") else None
         max_results = min(500, max(1, int(data.get("max_results", 10))))
     except (TypeError, ValueError):
         return jsonify(error="follower must be a number"), 400
-    if source not in {"telegram", "youtube"} or not keyword:
+    if source not in {"telegram", "youtube", "x"} or not keyword:
         return jsonify(error="source and keyword are required"), 400
+    if follower_max is not None and follower_max < follower:
+        return jsonify(error="follower_max must be >= follower"), 400
     job_id = uuid.uuid4().hex[:12]
     with JOBS_LOCK:
         JOBS[job_id] = {"status": "STARTING", "item_count": 0, "source": source}
-    threading.Thread(target=_run_discovery_job, args=(job_id, source, keyword, follower, location, max_results), daemon=True).start()
+    threading.Thread(target=_run_discovery_job, args=(job_id, source, keyword, follower, follower_max, location, max_results, exclude_seen), daemon=True).start()
     return jsonify(job_id=job_id)
 
 

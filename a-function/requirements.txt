@@ -5,3 +5,4 @@ psycopg[binary]
 gunicorn
 cryptography
 telethon
+openpyxl

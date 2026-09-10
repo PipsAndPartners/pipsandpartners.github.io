@@ -10,6 +10,8 @@
   --accent: #0b63b8;
   --accent-dk: #0a5199;
   --accent-2: #7cc3f2;
+  --accent-apify: #b8630b;
+  --accent-apify-dk: #954f08;
   --shadow: 0 1px 3px rgba(10,37,64,0.06), 0 10px 30px rgba(10,37,64,0.08);
 }
 
@@ -83,18 +85,44 @@ h1 { margin: 0 0 0.25rem; color: var(--navy); }
   padding: 1.25rem;
   background: var(--panel);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+.apify-tools {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent-apify);
   border-radius: 10px;
   box-shadow: var(--shadow);
 }
 .tool-heading { display: flex; justify-content: space-between; gap: 1rem; align-items: baseline; }
 .tool-heading h2 { margin: 0.15rem 0 1rem; color: var(--navy); }
 .eyebrow { color: var(--accent); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.eyebrow.apify { color: var(--accent-apify); }
 .tool-note { color: var(--muted); font-size: 0.8rem; }
 .discovery-grid { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 1rem; }
 .discovery-form { padding: 1rem; background: var(--panel-2); box-shadow: none; }
-.discovery-form h3 { margin-top: 0; color: var(--navy); }
+.discovery-form h3 { margin: 0 0 0.4rem; color: var(--navy); }
+.form-badge {
+  display: inline-block;
+  margin-bottom: 0.85rem;
+  padding: 0.15rem 0.55rem;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
 .tool-status { min-height: 1.1rem; color: var(--muted); font-size: 0.82rem; }
-#discovery-results { margin-top: 1rem; max-height: 36vh; overflow: auto; }
+.checkbox-line { flex-direction: row; align-items: flex-start; gap: 0.5rem; font-size: 0.82rem; }
+.checkbox-line input { flex: none; width: 1rem; height: 1rem; margin-top: 0.1rem; padding: 0; }
+#discovery-results.table-wrap { margin-top: 1rem; max-height: 36vh; }
 #discovery-download { display: inline-block; margin-top: 0.75rem; color: var(--accent); font-weight: 600; }
 @media (max-width: 800px) {
   .discovery-grid { grid-template-columns: 1fr; }
@@ -160,24 +188,28 @@ button {
 button:hover { background: var(--accent-dk); }
 button:disabled { opacity: 0.6; cursor: default; }
 
+.apify-tools button { background: var(--accent-apify); box-shadow: 0 6px 18px rgba(184,99,11,0.30); }
+.apify-tools button:hover { background: var(--accent-apify-dk); }
+.apify-tools input:focus, .apify-tools select:focus, .apify-tools textarea:focus { outline-color: var(--accent-apify); }
+
 #status-line { font-weight: 600; }
 #results-meta { color: var(--muted); font-size: 0.85rem; margin: 0 0 0.5rem; }
 
-#results-preview.table-wrap {
+.table-wrap {
   border: 1px solid var(--border);
   border-radius: 6px;
-  max-height: 60vh;
   overflow: auto;
 }
+#results-preview.table-wrap { max-height: 60vh; }
 
-#results-preview table {
+.table-wrap table {
   border-collapse: collapse;
   width: max-content;
   min-width: 100%;
   font-size: 0.8rem;
 }
 
-#results-preview th, #results-preview td {
+.table-wrap th, .table-wrap td {
   padding: 0.4rem 0.6rem;
   border-bottom: 1px solid var(--border);
   text-align: left;
@@ -187,17 +219,17 @@ button:disabled { opacity: 0.6; cursor: default; }
   text-overflow: ellipsis;
 }
 
-#results-preview thead th {
+.table-wrap thead th {
   position: sticky;
   top: 0;
   background: var(--panel);
   border-bottom: 2px solid var(--border);
 }
 
-#results-preview tbody tr:nth-child(even) { background: color-mix(in srgb, var(--bg) 60%, var(--panel)); }
+.table-wrap tbody tr:nth-child(even) { background: color-mix(in srgb, var(--bg) 60%, var(--panel)); }
 
-#results-preview td a { color: var(--accent); font-weight: 600; text-decoration: none; }
-#results-preview td a:hover { text-decoration: underline; }
+.table-wrap td a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.table-wrap td a:hover { text-decoration: underline; }
 
 #download-link {
   display: inline-block;

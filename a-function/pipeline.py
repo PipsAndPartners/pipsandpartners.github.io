@@ -10,14 +10,14 @@ import argparse
 from pathlib import Path
 
 from apify_config import get_client
-from platforms import PLATFORMS
+from platforms import ACTOR_PLATFORMS, PLATFORMS
 from runner import run_actor_live
 from storage import OUTPUT_DIR, save_items
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Scrape social profiles via Apify")
-    parser.add_argument("--platform", choices=[*PLATFORMS, "all"], default="linkedin")
+    parser.add_argument("--platform", choices=[*ACTOR_PLATFORMS, "all"], default="linkedin")
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--usernames", nargs="+", help="Instagram usernames to scrape")
@@ -33,7 +33,7 @@ def main() -> None:
         "search_query": args.search_query,
     }
 
-    names = list(PLATFORMS) if args.platform == "all" else [args.platform]
+    names = list(ACTOR_PLATFORMS) if args.platform == "all" else [args.platform]
     for name in names:
         module = PLATFORMS[name]
         run_input = module.build_input(overrides)

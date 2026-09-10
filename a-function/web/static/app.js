@@ -10,6 +10,7 @@ const downloadLink = document.getElementById("download-link");
 const discoveryResults = document.getElementById("discovery-results");
 const discoveryDownload = document.getElementById("discovery-download");
 const discoveryTable = document.getElementById("discovery-table");
+const discoveryExcel = document.getElementById("discovery-excel");
 
 const MAX_ROWS = 100;
 const MAX_CELL_LENGTH = 150;
@@ -152,6 +153,52 @@ function renderTable(items) {
       : `${items.length} item${items.length === 1 ? "" : "s"}.`;
 }
 
+const CONTACT_COLUMNS = [
+  ["name", "Channel"], ["youtube", "YouTube"], ["facebook", "Facebook"],
+  ["email", "Email"], ["zalo", "Zalo"], ["phone", "Phone"],
+  ["tiktok", "TikTok"], ["instagram", "Instagram"], ["telegram", "Telegram"], ["x", "X"],
+];
+
+function renderContacts(contacts) {
+  discoveryResults.textContent = "";
+  if (!contacts.length) {
+    discoveryResults.textContent = "No matching channels.";
+    return;
+  }
+  const table = document.createElement("table");
+  const head = document.createElement("tr");
+  CONTACT_COLUMNS.forEach(([, label]) => {
+    const th = document.createElement("th");
+    th.textContent = label;
+    head.appendChild(th);
+  });
+  const thead = document.createElement("thead");
+  thead.appendChild(head);
+  table.appendChild(thead);
+  const body = document.createElement("tbody");
+  contacts.forEach((contact) => {
+    const row = document.createElement("tr");
+    CONTACT_COLUMNS.forEach(([key]) => {
+      const td = document.createElement("td");
+      const value = contact[key] || "";
+      if (value && /^https?:\/\//.test(value)) {
+        const a = document.createElement("a");
+        a.href = value;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = value;
+        td.appendChild(a);
+      } else {
+        td.textContent = value;
+      }
+      row.appendChild(td);
+    });
+    body.appendChild(row);
+  });
+  table.appendChild(body);
+  discoveryResults.appendChild(table);
+}
+
 function renderDiscovery(items) {
   discoveryResults.textContent = "";
   if (!items.length) {
@@ -172,10 +219,10 @@ function renderDiscovery(items) {
   items.forEach((item) => {
     const row = document.createElement("tr");
     const snippet = item.snippet || {};
-    const stats = item.statistics || {};
-    const name = snippet.title || item.title || "—";
+    const stats = item.statistics || item.public_metrics || {};
+    const name = snippet.title || item.name || item.title || "—";
     const handle = snippet.customUrl || item.username || "—";
-    const followers = stats.subscriberCount || item.participants_count || "—";
+    const followers = stats.subscriberCount ?? stats.followers_count ?? item.participants_count ?? "—";
     [name, handle, Number(followers).toLocaleString()].forEach((value) => {
       const td = document.createElement("td");
       td.textContent = value;
@@ -183,6 +230,7 @@ function renderDiscovery(items) {
     });
     const profile = item.id && item.kind === "youtube#channel"
       ? `https://www.youtube.com/channel/${item.id}`
+      : item.public_metrics && item.username ? `https://x.com/${item.username}`
       : item.username ? `https://t.me/${item.username}` : null;
     row.appendChild(linkCell(profile, "View ↗"));
     body.appendChild(row);
@@ -199,17 +247,22 @@ document.querySelectorAll(".discovery-form").forEach((discoveryForm) => {
     const source = discoveryForm.dataset.source;
     const keyword = discoveryForm.elements.keyword.value.trim();
     const follower = Number(discoveryForm.elements.follower.value || 0);
+    const followerMaxRaw = discoveryForm.elements.follower_max?.value.trim();
+    const followerMax = followerMaxRaw ? Number(followerMaxRaw) : null;
     const location = discoveryForm.elements.location.value.trim();
     const maxResults = Number(discoveryForm.elements.max_results.value || 10);
     button.disabled = true;
     status.textContent = "Starting...";
     discoveryDownload.style.display = "none";
     discoveryTable.style.display = "none";
+    discoveryExcel.style.display = "none";
     try {
+      const payload = { source, keyword, follower, follower_max: followerMax, location, max_results: maxResults };
+      if (discoveryForm.elements.exclude_seen) payload.exclude_seen = discoveryForm.elements.exclude_seen.checked;
       const response = await fetch("/api/discovery/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source, keyword, follower, location, max_results: maxResults }),
+        body: JSON.stringify(payload),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || response.statusText);
@@ -225,7 +278,13 @@ document.querySelectorAll(".discovery-form").forEach((discoveryForm) => {
             return;
           }
           const result = await (await fetch(`/api/result/${data.job_id}`)).json();
-          renderDiscovery(result.items || []);
+          if (result.contacts) {
+            renderContacts(result.contacts);
+            discoveryExcel.href = `/api/discovery/${data.job_id}/export.xlsx`;
+            discoveryExcel.style.display = "inline-block";
+          } else {
+            renderDiscovery(result.items || []);
+          }
           discoveryDownload.href = `/api/download/${data.job_id}`;
           discoveryDownload.style.display = "inline-block";
           discoveryTable.href = `/api/table/${data.job_id}`;
@@ -274,6 +333,7 @@ form.addEventListener("submit", async (event) => {
         actor_id: actorIdInput.value.trim(),
         run_input: runInput,
         platform: presetSelect.value || "custom",
+        exclude_seen: document.getElementById("exclude-seen-apify")?.checked ?? false,
       }),
     });
     const data = await res.json();

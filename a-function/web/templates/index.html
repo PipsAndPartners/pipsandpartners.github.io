@@ -26,36 +26,77 @@
   <section class="discovery-tools">
     <div class="tool-heading">
       <div>
-        <span class="eyebrow">Discovery</span>
-        <h2>Find finance leads by keyword</h2>
+        <span class="eyebrow">Official API</span>
+        <h2>Native platform search — Telegram · YouTube · X</h2>
       </div>
-      <span class="tool-note">Telegram session and YouTube Data API key stay local.</span>
+      <span class="tool-note">Direct official APIs (Telegram session, YouTube Data API, X API) — no Apify credits used.</span>
     </div>
     <div class="discovery-grid">
       <form class="discovery-form" data-source="telegram">
         <h3>Telegram</h3>
+        <span class="form-badge">Official API · Telethon</span>
         <label>Keyword
           <input name="keyword" value="forex Việt Nam" required>
         </label>
         <label>Minimum members
           <input name="follower" type="number" min="0" value="10000" required>
         </label>
+        <label>Maximum members
+          <input name="follower_max" type="number" min="0" placeholder="no limit">
+        </label>
         <label>Location
           <input name="location" placeholder="Australia, Mỹ, UK or all" value="all">
         </label>
         <label>Max results
           <input name="max_results" type="number" min="1" max="500" value="10" required>
+        </label>
+        <label class="checkbox-line">
+          <input name="exclude_seen" type="checkbox" checked>
+          Skip channels/groups already found in earlier searches
         </label>
         <button type="submit">Search Telegram</button>
         <p class="tool-status" aria-live="polite">Ready.</p>
       </form>
       <form class="discovery-form" data-source="youtube">
         <h3>YouTube</h3>
+        <span class="form-badge">Official API · YouTube Data API v3</span>
         <label>Keyword
           <input name="keyword" value="người Việt trading forex" required>
         </label>
         <label>Minimum subscribers
           <input name="follower" type="number" min="0" value="1000" required>
+        </label>
+        <label>Maximum subscribers
+          <input name="follower_max" type="number" min="0" placeholder="no limit">
+        </label>
+        <label>Location
+          <select name="location">
+            {% for code, country in location_options %}
+            <option value="{{ code }}"{% if code == 'all' %} selected{% endif %}>{{ country }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Max results
+          <input name="max_results" type="number" min="1" max="500" value="10" required>
+        </label>
+        <label class="checkbox-line">
+          <input name="exclude_seen" type="checkbox" checked>
+          Skip channels already found in earlier searches
+        </label>
+        <button type="submit">Search YouTube</button>
+        <p class="tool-status" aria-live="polite">Ready.</p>
+      </form>
+      <form class="discovery-form" data-source="x">
+        <h3>X (Twitter)</h3>
+        <span class="form-badge">Official API · X API v2</span>
+        <label>Keyword
+          <input name="keyword" value="forex Việt Nam" required>
+        </label>
+        <label>Minimum followers
+          <input name="follower" type="number" min="0" value="1000" required>
+        </label>
+        <label>Maximum followers
+          <input name="follower_max" type="number" min="0" placeholder="no limit">
         </label>
         <label>Location
           <input name="location" placeholder="Australia, Mỹ, UK or all" value="all">
@@ -63,45 +104,64 @@
         <label>Max results
           <input name="max_results" type="number" min="1" max="500" value="10" required>
         </label>
-        <button type="submit">Search YouTube</button>
+        <label class="checkbox-line">
+          <input name="exclude_seen" type="checkbox" checked>
+          Skip accounts already found in earlier searches
+        </label>
+        <button type="submit">Search X</button>
         <p class="tool-status" aria-live="polite">Ready.</p>
       </form>
     </div>
     <div id="discovery-results" class="table-wrap"></div>
     <a id="discovery-download" style="display:none">Download discovery JSON</a>
     <a id="discovery-table" style="display:none" target="_blank" rel="noopener">Open as table</a>
+    <a id="discovery-excel" style="display:none">Export to Excel</a>
   </section>
 
-  <div class="layout">
-    <form id="run-form">
-      <label>Social media / platform
-        <select id="preset">
-          <option value="" {% if not selected_platform or selected_platform == "custom" %}selected{% endif %}>-- custom actor --</option>
-          {% for name, cfg in presets.items() %}
-          <option value="{{ name }}" data-actor-id="{{ cfg.actor_id }}" data-input='{{ cfg.default_input | tojson }}' {% if name == selected_platform %}selected{% endif %}>{{ name }}</option>
-          {% endfor %}
-        </select>
-      </label>
+  <section class="apify-tools">
+    <div class="tool-heading">
+      <div>
+        <span class="eyebrow apify">Apify · a-function</span>
+        <h2>Run any Apify actor</h2>
+      </div>
+      <span class="tool-note">LinkedIn, Instagram, Facebook, TikTok, Douyin, Twitter/X — billed to your own Apify token.</span>
+    </div>
+    <div class="layout">
+      <form id="run-form">
+        <label>Social media / platform
+          <select id="preset">
+            <option value="" {% if not selected_platform or selected_platform == "custom" %}selected{% endif %}>-- custom actor --</option>
+            {% for name, cfg in presets.items() %}
+            <option value="{{ name }}" data-actor-id="{{ cfg.actor_id }}" data-input='{{ cfg.default_input | tojson }}' {% if name == selected_platform %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+        </label>
 
-      <label>Apify Actor ID
-        <input type="text" id="actor-id" placeholder="e.g. apify/instagram-profile-scraper" value="{{ initial_actor_id }}" required>
-      </label>
+        <label>Apify Actor ID
+          <input type="text" id="actor-id" placeholder="e.g. apify/instagram-profile-scraper" value="{{ initial_actor_id }}" required>
+        </label>
 
-      <label>Run Input (JSON)
-        <textarea id="run-input" rows="16" placeholder='{"usernames": ["nasa"]}'>{{ initial_run_input_json }}</textarea>
-      </label>
+        <label>Run Input (JSON)
+          <textarea id="run-input" rows="16" placeholder='{"usernames": ["nasa"]}'>{{ initial_run_input_json }}</textarea>
+        </label>
 
-      <button type="submit" id="run-button">Run actor</button>
-    </form>
+        <label class="checkbox-line">
+          <input id="exclude-seen-apify" type="checkbox">
+          Hide results already stored from earlier runs (still billed — the actor runs either way)
+        </label>
 
-    <section id="status-panel">
-      <h2>Run status</h2>
-      <p id="status-line">No run started yet.</p>
-      <p id="results-meta"></p>
-      <div id="results-preview" class="table-wrap"></div>
-      <a id="download-link" style="display:none">Download full JSON</a>
-    </section>
-  </div>
+        <button type="submit" id="run-button">Run actor</button>
+      </form>
+
+      <section id="status-panel">
+        <h2>Run status</h2>
+        <p id="status-line">No run started yet.</p>
+        <p id="results-meta"></p>
+        <div id="results-preview" class="table-wrap"></div>
+        <a id="download-link" style="display:none">Download full JSON</a>
+      </section>
+    </div>
+  </section>
 
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

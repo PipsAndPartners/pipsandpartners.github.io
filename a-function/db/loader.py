@@ -44,13 +44,13 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
         raise ValueError(f"platforms.{platform} has no to_entity() mapping yet")
 
     staging_table = sql.Identifier(f"staging_{platform}")
-    staging_columns = "platform_id, raw, source_url, run_id"
-    staging_values = "%s, %s, %s, %s"
-    if platform == "youtube":
-        staging_columns += ", quota_units"
-        staging_values += ", %s"
+    # staging tables aren't uniform (see db/01_schema.sql): most carry run_id,
+    # staging_youtube carries quota_units instead, staging_telegram carries neither.
+    extra_column = {"youtube": "quota_units", "telegram": None}.get(platform, "run_id")
+    columns = "platform_id, raw, source_url" + (f", {extra_column}" if extra_column else "")
+    placeholders = "%s, %s, %s" + (", %s" if extra_column else "")
     insert_staging = sql.SQL(
-        "INSERT INTO {} (" + staging_columns + ") VALUES (" + staging_values + ")"
+        "INSERT INTO {} (" + columns + ") VALUES (" + placeholders + ")"
     ).format(staging_table)
 
     loaded = 0
@@ -61,10 +61,12 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
             if not platform_id:
                 continue  # can't identify this row without a stable platform id
 
-            staging_params = (platform_id, Jsonb(item), entity.get("source_url"), run_id)
-            if platform == "youtube":
-                staging_params += (item.get("quota_units"),)
-            cur.execute(insert_staging, staging_params)
+            staging_row = [platform_id, Jsonb(item), entity.get("source_url")]
+            if extra_column == "quota_units":
+                staging_row.append(item.get("quota_units"))
+            elif extra_column == "run_id":
+                staging_row.append(run_id)
+            cur.execute(insert_staging, staging_row)
             cur.execute(
                 UPSERT_ENTITY,
                 (
