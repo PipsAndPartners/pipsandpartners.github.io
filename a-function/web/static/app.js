@@ -258,7 +258,6 @@ document.querySelectorAll(".discovery-form").forEach((discoveryForm) => {
     discoveryExcel.style.display = "none";
     try {
       const payload = { source, keyword, follower, follower_max: followerMax, location, max_results: maxResults };
-      if (discoveryForm.elements.exclude_seen) payload.exclude_seen = discoveryForm.elements.exclude_seen.checked;
       const response = await fetch("/api/discovery/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -333,7 +332,6 @@ form.addEventListener("submit", async (event) => {
         actor_id: actorIdInput.value.trim(),
         run_input: runInput,
         platform: presetSelect.value || "custom",
-        exclude_seen: document.getElementById("exclude-seen-apify")?.checked ?? false,
       }),
     });
     const data = await res.json();

@@ -105,7 +105,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: str, apify_token: str, exclude_seen: bool = False) -> None:
+def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: str, apify_token: str) -> None:
     def on_progress(status: str, item_count: int) -> None:
         with JOBS_LOCK:
             JOBS[job_id]["status"] = status
@@ -114,11 +114,6 @@ def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: 
     try:
         client = get_client(apify_token)
         items = run_actor_live(client, label, actor_id, run_input, poll_seconds=3.0, on_progress=on_progress)
-        skipped_seen = 0
-        if exclude_seen:
-            kept = _drop_seen_items(platform, items)
-            skipped_seen = len(items) - len(kept)
-            items = kept
         out_path = save_items(label, items)
 
         db_status = None
@@ -132,9 +127,6 @@ def _run_job(job_id: str, actor_id: str, run_input: dict, label: str, platform: 
                 db_status = f"loaded {loaded} into Postgres"
             except Exception as exc:  # noqa: BLE001 - DB is optional, JSON file already saved above
                 db_status = f"Postgres load skipped: {exc}"
-
-        if skipped_seen:
-            db_status = f"{db_status}; skipped {skipped_seen} already-seen" if db_status else f"skipped {skipped_seen} already-seen"
 
         with JOBS_LOCK:
             JOBS[job_id].update(
@@ -192,7 +184,6 @@ def start_run():
     actor_id = (data.get("actor_id") or "").strip()
     run_input = data.get("run_input")
     platform = (data.get("platform") or "custom").strip() or "custom"
-    exclude_seen = bool(data.get("exclude_seen", False))
 
     if not actor_id:
         return jsonify(error="actor_id is required"), 400
@@ -209,7 +200,7 @@ def start_run():
         JOBS[job_id] = {"status": "STARTING", "item_count": 0, "actor_id": actor_id, "label": label, "platform": platform}
 
     apify_token = decrypt_token(g.user["apify_token_encrypted"])
-    thread = threading.Thread(target=_run_job, args=(job_id, actor_id, run_input, label, platform, apify_token, exclude_seen), daemon=True)
+    thread = threading.Thread(target=_run_job, args=(job_id, actor_id, run_input, label, platform, apify_token), daemon=True)
     thread.start()
     return jsonify(job_id=job_id)
 
@@ -365,49 +356,14 @@ def _location_match(text: str, location: str, *, country_code: str = "") -> bool
     return any(re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text) for term in terms)
 
 
-def _seen_platform_ids(platform: str) -> set[str]:
-    """platform_ids already stored by earlier discovery runs. Best-effort: empty set if Postgres is down."""
-    try:
-        conn = get_conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT platform_id FROM entities WHERE platform = %s", (platform,))
-                return {row[0] for row in cur.fetchall()}
-        finally:
-            conn.close()
-    except Exception:  # noqa: BLE001 - dedup is optional, discovery still runs without it
-        return set()
-
-
-def _drop_seen_items(platform: str, items: list[dict]) -> list[dict]:
-    """Filter out items whose entity was already stored by an earlier run."""
-    module = PLATFORMS.get(platform)
-    if not module or not hasattr(module, "to_entity"):
-        return items
-    seen = _seen_platform_ids(platform)
-    if not seen:
-        return items
-    kept = []
-    for item in items:
-        try:
-            platform_id = module.to_entity(item).get("platform_id")
-        except Exception:  # noqa: BLE001 - a malformed row just doesn't get deduped
-            platform_id = None
-        if not platform_id or platform_id not in seen:
-            kept.append(item)
-    return kept
-
-
-def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, follower_max: int | None, location: str, max_results: int, exclude_seen: bool = False) -> None:
+def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, follower_max: int | None, location: str, max_results: int) -> None:
     contacts = None
     try:
         if source == "youtube":
             result = discover_youtube([keyword], max_results=50)
-            seen = _seen_platform_ids("youtube") if exclude_seen else set()
             items = [
                 item for item in result["items"]
-                if item.get("id") not in seen
-                and int(item.get("statistics", {}).get("subscriberCount", 0)) >= follower
+                if int(item.get("statistics", {}).get("subscriberCount", 0)) >= follower
                 and (follower_max is None or int(item.get("statistics", {}).get("subscriberCount", 0)) <= follower_max)
                 and _location_match(
                     " ".join((
@@ -424,7 +380,7 @@ def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, fo
                 )
             ][:max_results]
             result["items"] = items
-            result["filter"] = {"keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results, "exclude_seen": exclude_seen}
+            result["filter"] = {"keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results}
             contacts = []
             for item in items:
                 channel_id = item.get("id")
@@ -452,11 +408,9 @@ def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, fo
                 db_status = f"Postgres load skipped: {exc}"
         elif source == "x":
             result = discover_x([keyword], max_results=50)
-            seen = _seen_platform_ids("twitter") if exclude_seen else set()
             items = [
                 item for item in result["items"]
-                if (item.get("username") or item.get("id")) not in seen
-                and int(item.get("public_metrics", {}).get("followers_count", 0)) >= follower
+                if int(item.get("public_metrics", {}).get("followers_count", 0)) >= follower
                 and (follower_max is None or int(item.get("public_metrics", {}).get("followers_count", 0)) <= follower_max)
                 and _location_match(
                     " ".join((item.get("description") or "", item.get("location") or "")),
@@ -468,7 +422,7 @@ def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, fo
                 )
             ][:max_results]
             result["items"] = items
-            result["filter"] = {"keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results, "exclude_seen": exclude_seen}
+            result["filter"] = {"keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results}
             contacts = []
             for item in items:
                 username = item.get("username")
@@ -494,15 +448,12 @@ def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, fo
             except Exception as exc:
                 db_status = f"Postgres load skipped: {exc}"
         elif source == "telegram":
-            seen = _seen_platform_ids("telegram") if exclude_seen else set()
             async def collect() -> list[dict]:
                 candidates = await search_telegram_entities([keyword], 50)
                 settings = Settings.from_env()
                 results = []
                 async with build_client(settings) as client:
                     for candidate in candidates:
-                        if str(candidate.get("platform_id")) in seen:
-                            continue
                         try:
                             entity = await client.get_entity(candidate.get("username") or candidate["platform_id"])
                             from telethon.tl.functions.channels import GetFullChannelRequest
@@ -523,7 +474,7 @@ def _run_discovery_job(job_id: str, source: str, keyword: str, follower: int, fo
                             continue
                 return results
             items = asyncio.run(collect())
-            result = {"source": "telegram", "keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results, "exclude_seen": exclude_seen, "items": items}
+            result = {"source": "telegram", "keyword": keyword, "follower_min": follower, "follower_max": follower_max, "location": location, "max_results": max_results, "items": items}
             contacts = []
             for item in items:
                 username = item.get("username")
@@ -562,7 +513,6 @@ def start_discovery():
     source = (data.get("source") or "").strip().lower()
     keyword = (data.get("keyword") or "").strip()
     location = (data.get("location") or "").strip()
-    exclude_seen = bool(data.get("exclude_seen", False))
     try:
         follower = max(0, int(data.get("follower", 0)))
         follower_max = data.get("follower_max")
@@ -577,7 +527,7 @@ def start_discovery():
     job_id = uuid.uuid4().hex[:12]
     with JOBS_LOCK:
         JOBS[job_id] = {"status": "STARTING", "item_count": 0, "source": source}
-    threading.Thread(target=_run_discovery_job, args=(job_id, source, keyword, follower, follower_max, location, max_results, exclude_seen), daemon=True).start()
+    threading.Thread(target=_run_discovery_job, args=(job_id, source, keyword, follower, follower_max, location, max_results), daemon=True).start()
     return jsonify(job_id=job_id)
 
 

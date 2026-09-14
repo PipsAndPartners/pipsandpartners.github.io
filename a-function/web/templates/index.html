@@ -50,10 +50,6 @@
         <label>Max results
           <input name="max_results" type="number" min="1" max="500" value="10" required>
         </label>
-        <label class="checkbox-line">
-          <input name="exclude_seen" type="checkbox" checked>
-          Skip channels/groups already found in earlier searches
-        </label>
         <button type="submit">Search Telegram</button>
         <p class="tool-status" aria-live="polite">Ready.</p>
       </form>
@@ -79,10 +75,6 @@
         <label>Max results
           <input name="max_results" type="number" min="1" max="500" value="10" required>
         </label>
-        <label class="checkbox-line">
-          <input name="exclude_seen" type="checkbox" checked>
-          Skip channels already found in earlier searches
-        </label>
         <button type="submit">Search YouTube</button>
         <p class="tool-status" aria-live="polite">Ready.</p>
       </form>
@@ -103,10 +95,6 @@
         </label>
         <label>Max results
           <input name="max_results" type="number" min="1" max="500" value="10" required>
-        </label>
-        <label class="checkbox-line">
-          <input name="exclude_seen" type="checkbox" checked>
-          Skip accounts already found in earlier searches
         </label>
         <button type="submit">Search X</button>
         <p class="tool-status" aria-live="polite">Ready.</p>
@@ -143,11 +131,6 @@
 
         <label>Run Input (JSON)
           <textarea id="run-input" rows="16" placeholder='{"usernames": ["nasa"]}'>{{ initial_run_input_json }}</textarea>
-        </label>
-
-        <label class="checkbox-line">
-          <input id="exclude-seen-apify" type="checkbox">
-          Hide results already stored from earlier runs (still billed — the actor runs either way)
         </label>
 
         <button type="submit" id="run-button">Run actor</button>
