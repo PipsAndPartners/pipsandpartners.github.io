@@ -1,5 +1,7 @@
 """Shared discovery watermark and entity upsert helpers."""
 
+from collections import Counter
+from collections.abc import Iterable
 from datetime import timedelta
 from typing import Any
 
@@ -7,6 +9,13 @@ from psycopg import Connection
 
 
 _DEFAULT_REFRESH = timedelta(days=1)
+
+# claim_entity outcomes, tallied per run for the weekly-refresh cost report
+# (E6 watermark feedback loop #1). "skipped" is the one that saves money —
+# a known entity still inside its refresh window is left untouched.
+NEW = "new"              # first time we've seen this (platform, platform_id)
+REFRESHED = "refreshed"  # known but stale / never enriched -> re-processed
+SKIPPED = "skipped"      # known and still fresh -> watermark hit, no work done
 
 
 def claim_entity(
@@ -16,8 +25,13 @@ def claim_entity(
     platform_id: str,
     entity: dict[str, Any],
     refresh_after: timedelta = _DEFAULT_REFRESH,
-) -> tuple[int | None, bool]:
-    """Return ``(entity_id, processed)`` and skip a fresh discovery watermark."""
+) -> tuple[int | None, str]:
+    """Upsert an entity unless its watermark is still fresh.
+
+    Returns ``(entity_id, outcome)`` where ``outcome`` is one of NEW, REFRESHED
+    or SKIPPED. A SKIPPED entity keeps its ``entity_id`` but is left untouched,
+    so a weekly refresh spends nothing re-processing it.
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -32,7 +46,7 @@ def claim_entity(
         )
         existing = cur.fetchone()
         if existing:
-            return existing[0], False
+            return existing[0], SKIPPED
 
         cur.execute(
             """
@@ -53,7 +67,7 @@ def claim_entity(
                 source_url = EXCLUDED.source_url,
                 last_enriched = now(),
                 last_seen_at = now()
-            RETURNING entity_id
+            RETURNING entity_id, (xmax = 0) AS inserted
             """,
             (
                 platform,
@@ -68,6 +82,12 @@ def claim_entity(
                 entity.get("source_url"),
             ),
         )
-        entity_id = cur.fetchone()[0]
+        entity_id, inserted = cur.fetchone()
     conn.commit()
-    return entity_id, True
+    return entity_id, (NEW if inserted else REFRESHED)
+
+
+def summarize(outcomes: Iterable[str]) -> dict[str, int]:
+    """Count claim_entity outcomes for the per-run 'new vs skipped' log line."""
+    counts = Counter(outcomes)
+    return {NEW: counts[NEW], REFRESHED: counts[REFRESHED], SKIPPED: counts[SKIPPED]}

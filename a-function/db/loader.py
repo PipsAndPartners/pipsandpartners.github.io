@@ -6,10 +6,14 @@ platform_id), and db/02_resolve.sql later links entities across platforms that
 look like the same person (see db/01_schema.sql for the full model).
 """
 
+import logging
+
 from psycopg import Connection, sql
 from psycopg.types.json import Jsonb
 
 from platforms import PLATFORMS
+
+LOG = logging.getLogger(__name__)
 
 UPSERT_ENTITY = """
     INSERT INTO entities (
@@ -27,7 +31,7 @@ UPSERT_ENTITY = """
         email_norm = EXCLUDED.email_norm,
         source_url = EXCLUDED.source_url,
         last_seen_at = now()
-    RETURNING entity_id
+    RETURNING entity_id, (xmax = 0) AS inserted
 """
 
 INSERT_FOLLOWER_SNAPSHOT = """
@@ -54,6 +58,7 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
     ).format(staging_table)
 
     loaded = 0
+    new = 0
     with conn.cursor() as cur:
         for item in items:
             entity = module.to_entity(item)
@@ -82,7 +87,9 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
                     entity.get("source_url"),
                 ),
             )
-            entity_id = cur.fetchone()[0]
+            entity_id, inserted = cur.fetchone()
+            if inserted:
+                new += 1
 
             follower_count = entity.get("follower_count")
             if follower_count is not None:
@@ -91,4 +98,5 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
             loaded += 1
 
     conn.commit()
+    LOG.info("%s ingest: %d new, %d already known (of %d rows)", platform, new, loaded - new, loaded)
     return loaded

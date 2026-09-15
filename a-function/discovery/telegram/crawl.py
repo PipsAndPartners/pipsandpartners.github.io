@@ -21,7 +21,7 @@ from telethon.errors import (
 from telethon.tl.functions.channels import GetFullChannelRequest
 
 from db.connection import get_conn
-from discovery.common.watermark import claim_entity
+from discovery.common.watermark import NEW, REFRESHED, SKIPPED, claim_entity, summarize
 from discovery.telegram.client import Settings, build_client, polite_sleep
 from discovery.telegram.expand import (
     linked_candidates,
@@ -118,6 +118,7 @@ async def run(seeds: list[str] | None = None) -> int:
     frontier_path = Path(os.getenv("TELEGRAM_FRONTIER_FILE", ".telegram_frontier.json"))
     queue = _load_frontier(frontier_path, seeds or load_seeds())
     processed = 0
+    outcomes: list[str] = []
     async with build_client(settings) as client:
         with get_conn() as conn:
             while queue and processed < settings.max_channels:
@@ -132,13 +133,15 @@ async def run(seeds: list[str] | None = None) -> int:
                     platform_id = raw["id"]
                     source_url = f"https://t.me/{raw['username']}" if raw["username"] else None
                     _write_staging(conn, raw, source=source, discovered_from=discovered_from)
-                    _, accepted = claim_entity(
+                    _, outcome = claim_entity(
                         conn,
                         platform="telegram",
                         platform_id=platform_id,
                         entity=_entity_fields(raw, source_url),
                     )
-                    LOG.info("telegram entity=%s source=%s processed=%s", platform_id, source, accepted)
+                    outcomes.append(outcome)
+                    accepted = outcome != SKIPPED
+                    LOG.info("telegram entity=%s source=%s outcome=%s", platform_id, source, outcome)
                     processed += 1
                     if accepted and depth < settings.max_depth:
                         candidates = linked_candidates(full)
@@ -169,6 +172,11 @@ async def run(seeds: list[str] | None = None) -> int:
                     LOG.warning("Skipping Telegram target %r: %s", target, error)
     if not queue and frontier_path.exists():
         frontier_path.unlink()
+    tally = summarize(outcomes)
+    LOG.info(
+        "telegram refresh done: new=%d refreshed=%d skipped=%d (processed=%d)",
+        tally[NEW], tally[REFRESHED], tally[SKIPPED], processed,
+    )
     return processed
 
 
