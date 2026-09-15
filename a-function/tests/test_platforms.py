@@ -1,6 +1,6 @@
 import unittest
 
-from platforms import twitter, douyin, youtube
+from platforms import twitter, douyin, youtube, facebook
 
 
 class TwitterTests(unittest.TestCase):
@@ -55,6 +55,48 @@ class DouyinTests(unittest.TestCase):
         }})
         urls = [l["url"] for l in links]
         self.assertEqual(urls, ["https://a.com/x", "https://b.com"])
+
+
+class FacebookTests(unittest.TestCase):
+    def test_build_input_default_has_required_categories(self):
+        run_input = facebook.build_input({})
+        self.assertEqual(run_input["categories"], ["forex"])
+        self.assertIn("locations", run_input)
+        self.assertIn("resultsLimit", run_input)
+
+    def test_build_input_search_query_maps_to_categories(self):
+        self.assertEqual(facebook.build_input({"search_query": "cfd"})["categories"], ["cfd"])
+
+    def test_build_input_overrides_locations_and_limit(self):
+        run_input = facebook.build_input({"locations": ["Australia"], "resultsLimit": 5})
+        self.assertEqual(run_input["locations"], ["Australia"])
+        self.assertEqual(run_input["resultsLimit"], 5)
+
+    def test_to_entity_keeps_contact_fields(self):
+        entity = facebook.to_entity({
+            "pageId": 42,
+            "pageName": "fxbroker",
+            "title": "FX Broker",
+            "info": "Introducing broker",
+            "website": "https://fx.example",
+            "followers": 1200,
+            "email": "  HELLO@FX.Example ",
+            "phone": "+61 400 000 000",
+            "messenger": "https://m.me/fxbroker",
+            "pageUrl": "https://facebook.com/fxbroker",
+        })
+        self.assertEqual(entity["platform_id"], "42")
+        self.assertEqual(entity["handle"], "fxbroker")
+        self.assertEqual(entity["follower_count"], 1200)
+        self.assertEqual(entity["email_norm"], "hello@fx.example")
+        self.assertEqual(entity["phone_norm"], "+61 400 000 000")
+        self.assertEqual(entity["messenger_url"], "https://m.me/fxbroker")
+        self.assertEqual(entity["source_url"], "https://facebook.com/fxbroker")
+
+    def test_to_entity_falls_back_to_likes_and_no_email(self):
+        entity = facebook.to_entity({"pageId": 1, "likes": 7})
+        self.assertEqual(entity["follower_count"], 7)
+        self.assertIsNone(entity["email_norm"])
 
 
 class YouTubeTests(unittest.TestCase):
