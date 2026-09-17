@@ -21,8 +21,8 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=OUTPUT_DIR)
     parser.add_argument("--poll-seconds", type=float, default=5.0)
     parser.add_argument("--usernames", nargs="+", help="Instagram usernames to scrape")
-    parser.add_argument("--urls", nargs="+", help="Facebook page/profile URLs to scrape")
-    parser.add_argument("--search-query", help="Override search query/term (linkedin/twitter)")
+    parser.add_argument("--urls", nargs="+", help="Specific profile/page URLs to scrape (instagram)")
+    parser.add_argument("--search-query", help="Override the search term (linkedin/twitter/facebook/tiktok/douyin)")
     parser.add_argument("--no-db", action="store_true", help="Skip loading results into Postgres (JSON file only)")
     args = parser.parse_args()
 

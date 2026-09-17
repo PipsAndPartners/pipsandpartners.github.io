@@ -1,0 +1,64 @@
+# Other forex brokers' own brand names. A discovered account whose name/handle
+# leads with one of these is the broker's official page, not an IB -> excluded by
+# discovery/shortlist.py. Add new broker brands here (one per line, lowercase);
+# no code change needed. Lines starting with # are comments.
+vantage
+exness
+ic markets
+icmarkets
+lirunex
+fxpro
+fxtm
+hotforex
+octafx
+tickmill
+pepperstone
+avatrade
+etoro
+mitrade
+xm global
+xmglobal
+doo prime
+dooprime
+justmarkets
+fxopen
+oanda
+tmgm
+roboforex
+markets4you
+fbs
+instaforex
+litefinance
+weltrade
+valetax
+fxgt
+gemforex
+land-fx
+landfx
+land prime
+landprime
+tenkofx
+fpmarkets
+fp markets
+superfin
+fluxia
+fxcm
+vt markets
+vtmarkets
+cmc markets
+saxo
+swissquote
+dukascopy
+cwg markets
+cwgmarkets
+bcr
+blackbull
+blackwell
+pu prime
+puprime
+eightcap
+go markets
+gomarkets
+thinkmarkets
+admiral markets
+admirals

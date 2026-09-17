@@ -8,6 +8,8 @@ below work regardless of which mode a given run used.
 
 import re
 
+from discovery.common.contacts import contact_links, extract_contacts
+
 ACTOR_ID = "clockworks/tiktok-scraper"
 
 _URL_PATTERN = re.compile(r"https?://[^\s,)]+")
@@ -39,9 +41,14 @@ def to_entity(item: dict) -> dict:
     """Best-effort mapping for profile fields (unverified against a real run, unlike
     linkedin.py); engagement fields in extract_engagement() below are verified
     against Apify's actor docs.
+
+    email_norm/phone_norm are pulled from the bio text -- many forex IBs paste a
+    contact email or Telegram/Zalo number in their TikTok signature, and those
+    feed cross-platform identity resolution (db/02_resolve.sql).
     """
     meta = item.get("authorMeta") or item
     handle = meta.get("name") or meta.get("uniqueId")
+    contacts = extract_contacts(meta.get("signature"))
     return {
         "platform_id": meta.get("id") or handle,
         "handle": handle,
@@ -50,14 +57,15 @@ def to_entity(item: dict) -> dict:
         "website_url": meta.get("bioLink"),
         "avatar_url": meta.get("avatar"),
         "follower_count": meta.get("fans"),
-        "email_norm": None,
+        "email_norm": contacts["email"].lower() or None,
+        "phone_norm": contacts["phone"] or None,
         "source_url": f"https://www.tiktok.com/@{handle}" if handle else None,
     }
 
 
 def extract_related_links(item: dict) -> list[dict]:
-    """Other links found in the raw profile: the link-in-bio field, plus any URL
-    mentioned in the signature text (people often paste IG/Telegram links there).
+    """Other links found in the raw profile: the link-in-bio field, any
+    other-platform account pasted in the bio, plus any bare URL in the signature.
     Unlike linkedin.py's version, there's no employment-history equivalent here.
     """
     meta = item.get("authorMeta") or item
@@ -69,6 +77,7 @@ def extract_related_links(item: dict) -> list[dict]:
         links.append({"label": "Bio link", "url": url})
 
     signature = meta.get("signature") or ""
+    links.extend(contact_links(signature))  # nicely-labelled other-platform accounts
     for url in _URL_PATTERN.findall(signature):
         links.append({"label": "Mentioned in bio", "url": url.rstrip(".,)")})
 

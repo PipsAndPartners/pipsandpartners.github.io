@@ -232,10 +232,23 @@ Scrape a platform:
 ```
 
 Useful flags:
-- `--search-query "your search"` — override the default search term (linkedin/twitter)
+- `--search-query "your search"` — override the default search term (linkedin/twitter/facebook/facebook_post/tiktok/douyin — Douyin now searches by keyword, it no longer needs a profile URL)
 - `--usernames user1 user2` — scrape specific people instead of searching (instagram/tiktok/twitter)
-- `--urls https://...` — scrape specific page URLs (facebook/douyin)
+- `--urls https://...` — scrape specific profile URLs (instagram)
 - `--no-db` — skip the Postgres load, JSON file only
+
+### Two Facebook channels
+
+- `--platform facebook` searches **Pages** (`apify/facebook-search-scraper`). On Facebook these are mostly brokers' own official pages, so it's best treated as *broker/competitor landscape*, not IB discovery.
+- `--platform facebook_post` searches public **posts** by keyword (`scraper_one/facebook-posts-search`) and records each post's **author** — the individual people posting about forex/XTB, i.e. the actual IB candidates — with per-post engagement. Authors land in `staging_facebook_post` / `entities.platform = 'facebook_post'` (apply `db/08_staging_facebook_post.sql` once).
+
+### IB shortlist
+
+Turn everything discovered into a ranked, deduped shortlist for one broker + market (drops the broker's own pages, rival brokers, and out-of-market accounts):
+```
+.\.venv\Scripts\python.exe -m discovery.shortlist --broker xtb --market vn --exclude-dir results\2026-09\2026-09-16 --top 10
+```
+Edit the broker exclusion list in `discovery/data/broker_brands.txt` (one brand per line, no code change needed).
 
 Score everyone currently in the database:
 ```

@@ -18,9 +18,9 @@ LOG = logging.getLogger(__name__)
 UPSERT_ENTITY = """
     INSERT INTO entities (
         platform, platform_id, handle, display_name, bio_text,
-        website_url, avatar_url, follower_count, email_norm, source_url
+        website_url, avatar_url, follower_count, email_norm, phone_norm, source_url
     )
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON CONFLICT (platform, platform_id) DO UPDATE SET
         handle = EXCLUDED.handle,
         display_name = EXCLUDED.display_name,
@@ -29,6 +29,8 @@ UPSERT_ENTITY = """
         avatar_url = EXCLUDED.avatar_url,
         follower_count = EXCLUDED.follower_count,
         email_norm = EXCLUDED.email_norm,
+        -- don't blank an existing phone with a NULL from a source that lacks one
+        phone_norm = COALESCE(EXCLUDED.phone_norm, entities.phone_norm),
         source_url = EXCLUDED.source_url,
         last_seen_at = now()
     RETURNING entity_id, (xmax = 0) AS inserted
@@ -59,44 +61,55 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
 
     loaded = 0
     new = 0
-    with conn.cursor() as cur:
+    failed = 0
+    # One outer transaction for the batch, but each item in its own savepoint so a
+    # single malformed item (e.g. a field the mapper didn't expect) is skipped
+    # instead of aborting the whole load -- a real Facebook run once lost all 40
+    # rows because one item's `info` came back as a list. See db/01_schema.sql.
+    with conn.cursor() as cur, conn.transaction():
         for item in items:
-            entity = module.to_entity(item)
-            platform_id = entity.get("platform_id")
-            if not platform_id:
-                continue  # can't identify this row without a stable platform id
+            try:
+                with conn.transaction():  # per-item savepoint
+                    entity = module.to_entity(item)
+                    platform_id = entity.get("platform_id")
+                    if not platform_id:
+                        continue  # can't identify this row without a stable platform id
 
-            staging_row = [platform_id, Jsonb(item), entity.get("source_url")]
-            if extra_column == "quota_units":
-                staging_row.append(item.get("quota_units"))
-            elif extra_column == "run_id":
-                staging_row.append(run_id)
-            cur.execute(insert_staging, staging_row)
-            cur.execute(
-                UPSERT_ENTITY,
-                (
-                    platform,
-                    platform_id,
-                    entity.get("handle"),
-                    entity.get("display_name"),
-                    entity.get("bio_text"),
-                    entity.get("website_url"),
-                    entity.get("avatar_url"),
-                    entity.get("follower_count"),
-                    entity.get("email_norm"),
-                    entity.get("source_url"),
-                ),
-            )
-            entity_id, inserted = cur.fetchone()
-            if inserted:
-                new += 1
+                    staging_row = [platform_id, Jsonb(item), entity.get("source_url")]
+                    if extra_column == "quota_units":
+                        staging_row.append(item.get("quota_units"))
+                    elif extra_column == "run_id":
+                        staging_row.append(run_id)
+                    cur.execute(insert_staging, staging_row)
+                    cur.execute(
+                        UPSERT_ENTITY,
+                        (
+                            platform,
+                            platform_id,
+                            entity.get("handle"),
+                            entity.get("display_name"),
+                            entity.get("bio_text"),
+                            entity.get("website_url"),
+                            entity.get("avatar_url"),
+                            entity.get("follower_count"),
+                            entity.get("email_norm"),
+                            entity.get("phone_norm"),
+                            entity.get("source_url"),
+                        ),
+                    )
+                    entity_id, inserted = cur.fetchone()
+                    if inserted:
+                        new += 1
 
-            follower_count = entity.get("follower_count")
-            if follower_count is not None:
-                cur.execute(INSERT_FOLLOWER_SNAPSHOT, (entity_id, follower_count))
+                    follower_count = entity.get("follower_count")
+                    if follower_count is not None:
+                        cur.execute(INSERT_FOLLOWER_SNAPSHOT, (entity_id, follower_count))
 
-            loaded += 1
+                    loaded += 1
+            except Exception as exc:  # noqa: BLE001 - one bad item must not sink the batch
+                failed += 1
+                LOG.warning("%s ingest: skipped a bad item (%s): %r", platform, type(exc).__name__, exc)
 
-    conn.commit()
-    LOG.info("%s ingest: %d new, %d already known (of %d rows)", platform, new, loaded - new, loaded)
+    LOG.info("%s ingest: %d new, %d already known, %d skipped (of %d rows)",
+             platform, new, loaded - new, failed, len(items))
     return loaded

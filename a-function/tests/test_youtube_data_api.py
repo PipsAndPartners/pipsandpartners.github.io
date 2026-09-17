@@ -28,6 +28,25 @@ class YouTubeDataApiTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["id"], "UC1")
         self.assertEqual(request.call_count, 2)
 
+    def test_region_and_language_bias_are_passed(self):
+        responses = [{"items": []}]
+        with patch.dict(os.environ, {"YOUTUBE_API_KEY": "k"}), patch(
+            "discovery.youtube_data_api.request", side_effect=responses
+        ) as request:
+            discover(["xtb"], max_results=5, region_code="VN", relevance_language="vi")
+        params = request.call_args.args[1]
+        self.assertEqual(params["regionCode"], "VN")
+        self.assertEqual(params["relevanceLanguage"], "vi")
+
+    def test_no_bias_by_default(self):
+        with patch.dict(os.environ, {"YOUTUBE_API_KEY": "k"}), patch(
+            "discovery.youtube_data_api.request", side_effect=[{"items": []}]
+        ) as request:
+            discover(["xtb"], max_results=5)
+        params = request.call_args.args[1]
+        self.assertNotIn("regionCode", params)
+        self.assertNotIn("relevanceLanguage", params)
+
     def test_maps_channel_to_entity(self):
         entity = to_entity(
             {

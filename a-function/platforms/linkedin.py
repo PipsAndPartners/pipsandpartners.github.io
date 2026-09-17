@@ -34,16 +34,24 @@ def to_entity(item: dict) -> dict:
     """Map a raw actor result item to the common `entities` row shape (db/01_schema.sql)."""
     position = (item.get("currentPosition") or [{}])[0]
     emails = item.get("emails") or []
+    phones = item.get("phoneNumbers") or item.get("phones") or []
     display_name = " ".join(filter(None, [item.get("firstName"), item.get("lastName")])) or None
     return {
         "platform_id": item.get("publicIdentifier") or item.get("id"),
         "handle": item.get("publicIdentifier"),
         "display_name": display_name,
-        "bio_text": item.get("about") or item.get("headline"),
+        "bio_text": " ".join(filter(None, [item.get("headline"), item.get("about")])).strip() or None,
         "website_url": position.get("companyLinkedinUrl"),
-        "avatar_url": None,
+        # field name varies by actor build; try the common spellings, else None.
+        "avatar_url": (
+            item.get("profilePicture")
+            or item.get("profilePictureUrl")
+            or item.get("pictureUrl")
+            or item.get("photoUrl")
+        ),
         "follower_count": item.get("followerCount"),
         "email_norm": emails[0].strip().lower() if emails else None,
+        "phone_norm": (phones[0] if isinstance(phones, list) and phones else item.get("phone")) or None,
         "source_url": item.get("linkedinUrl"),
     }
 
@@ -57,6 +65,12 @@ def extract_related_links(item: dict) -> list[dict]:
         if company_url:
             company_name = exp.get("companyName")
             links.append({"label": f"Company: {company_name}" if company_name else "Company", "url": company_url})
+
+    for site in item.get("websites") or []:
+        url = site.get("url") if isinstance(site, dict) else site
+        if url:
+            label = site.get("label") if isinstance(site, dict) else None
+            links.append({"label": f"Website: {label}" if label else "Website", "url": url})
 
     about = item.get("about") or ""
     for url in _URL_PATTERN.findall(about):

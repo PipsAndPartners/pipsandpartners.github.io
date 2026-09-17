@@ -36,7 +36,8 @@ def request(endpoint: str, params: dict) -> dict:
         raise YouTubeApiError(f"YouTube API request failed: {error}") from error
 
 
-def discover(keywords: list[str], max_results: int = 25) -> dict:
+def discover(keywords: list[str], max_results: int = 25,
+             region_code: str | None = None, relevance_language: str | None = None) -> dict:
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
         raise RuntimeError("Missing YOUTUBE_API_KEY")
@@ -44,16 +45,20 @@ def discover(keywords: list[str], max_results: int = 25) -> dict:
     quota_units = 0
     searches = []
     for keyword in keywords:
-        result = request(
-            "search",
-            {
-                "part": "snippet",
-                "type": "channel",
-                "q": keyword,
-                "maxResults": min(max_results, 50),
-                "key": api_key,
-            },
-        )
+        params = {
+            "part": "snippet",
+            "type": "channel",
+            "q": keyword,
+            "maxResults": min(max_results, 50),
+            "key": api_key,
+        }
+        # Bias results to a market/language so a broad brand keyword doesn't pull
+        # the broker's own foreign channels (e.g. "XTB" -> XTB Italia/UK/Deutschland).
+        if region_code:
+            params["regionCode"] = region_code
+        if relevance_language:
+            params["relevanceLanguage"] = relevance_language
+        result = request("search", params)
         quota_units += SEARCH_COST
         searches.append({"keyword": keyword, "raw": result})
         for item in result.get("items", []):
@@ -132,22 +137,39 @@ def main() -> None:
     parser.add_argument("--no-db", action="store_true")
     parser.add_argument("--overseas-vietnamese", action="store_true")
     parser.add_argument("--top", type=int, default=10)
+    parser.add_argument("--relevance-language", default="vi",
+                        help="bias results to this language (default vi); '' to disable")
+    parser.add_argument("--region-code", default=None,
+                        help="bias results to this region, e.g. VN; off by default so "
+                             "--overseas-vietnamese still finds VN creators living abroad")
     args = parser.parse_args()
 
-    result = discover(args.keywords, args.max_results)
+    # A hard region lock would defeat the overseas-Vietnamese search, so only the
+    # language bias applies in that mode.
+    region_code = None if args.overseas_vietnamese else args.region_code
+    result = discover(args.keywords, args.max_results,
+                      region_code=region_code or None, relevance_language=args.relevance_language or None)
     if args.overseas_vietnamese:
         result["items"] = filter_overseas_vietnamese(result["items"])
         result["filter"] = "Vietnamese + overseas + finance public text"
-    result["items"] = rank_channels(result["items"], args.top)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Persist EVERY discovered channel first, so dedup on later runs is reliable.
+    # (Truncating with --top before the DB load used to drop channels beyond the
+    # top-N from the database entirely, so a shortlist could show a channel that
+    # was never actually recorded -- and a re-run would rediscover it as "new".)
     loaded = None
     if not args.no_db:
         try:
             loaded = save_to_db(result["items"], result["quota_units"])
         except Exception as error:
             print(f"database load skipped: {error}")
-    print(json.dumps({"channels": len(result["items"]), "quota_units": result["quota_units"], "loaded": loaded}))
+
+    discovered = len(result["items"])
+    result["items"] = rank_channels(result["items"], args.top)  # top-N is only the export view
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({"discovered": discovered, "exported_top": len(result["items"]),
+                      "quota_units": result["quota_units"], "loaded": loaded}))
     print(f"saved -> {args.output}")
 
 

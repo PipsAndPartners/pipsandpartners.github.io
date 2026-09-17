@@ -80,15 +80,30 @@ def score_brand_safety(text: str) -> dict:
     return {"score": score, "note": note}
 
 
+def _following_count(raw: dict) -> int | None:
+    """The account's following/connections count, wherever a given platform's raw
+    item keeps it: LinkedIn uses top-level connectionsCount; TikTok nests
+    authorMeta.following; Douyin authorMeta.followingCount; Twitter author.following."""
+    if not raw:
+        return None
+    author = raw.get("authorMeta") or raw.get("author") or {}
+    for source in (raw, author):
+        for key in ("connectionsCount", "followingCount", "following"):
+            value = source.get(key)
+            if isinstance(value, (int, float)) and value > 0:
+                return int(value)
+    return None
+
+
 def score_audience_quality(follower_count: int | None, raw: dict) -> dict:
-    connections = raw.get("connectionsCount") if raw else None
-    if not follower_count or not connections:
-        return {"score": None, "note": "insufficient data (no follower/connections figures)"}
-    ratio = follower_count / max(connections, 1)
+    following = _following_count(raw or {})
+    if not follower_count or not following:
+        return {"score": None, "note": "insufficient data (no follower/following figures)"}
+    ratio = follower_count / max(following, 1)
     score = max(0, min(100, round(ratio * 20)))
     return {
         "score": score,
-        "note": f"weak proxy: follower/connections ratio ({ratio:.2f}) -- not real audience-quality analysis",
+        "note": f"weak proxy: follower/following ratio ({ratio:.2f}) -- not real audience-quality analysis",
     }
 
 

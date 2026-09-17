@@ -1,0 +1,15 @@
+# Personal/free email domains. On a Facebook Page, one of these (or a .edu / .edu.vn
+# address) reads as an individual IB or educator; any OTHER (corporate) domain reads
+# as a broker's own page and is excluded. One domain per line, lowercase.
+gmail.com
+googlemail.com
+yahoo.com
+yahoo.com.vn
+outlook.com
+outlook.com.vn
+hotmail.com
+hotmail.com.vn
+icloud.com
+live.com
+proton.me
+protonmail.com

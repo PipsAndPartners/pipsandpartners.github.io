@@ -29,6 +29,12 @@ class ContactsTests(unittest.TestCase):
         result = extract_contacts(None)
         self.assertEqual(set(result.values()), {""})
 
+    def test_accepts_list_valued_text(self):
+        # some actors return "info"/"about" as a list of lines, not a string.
+        result = extract_contacts(["line one", "mail me at ib@fx.com", "0912345678"])
+        self.assertEqual(result["email"], "ib@fx.com")
+        self.assertEqual(result["phone"], "0912345678")
+
 
 if __name__ == "__main__":
     unittest.main()

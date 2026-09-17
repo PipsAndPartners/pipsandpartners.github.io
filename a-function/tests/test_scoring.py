@@ -42,6 +42,11 @@ class AudienceQualityTests(unittest.TestCase):
         self.assertIsNone(scoring.score_audience_quality(1000, {})["score"])
         self.assertIsNone(scoring.score_audience_quality(None, {"connectionsCount": 5})["score"])
 
+    def test_reads_following_from_nested_author_meta(self):
+        # TikTok/Douyin keep the following count under authorMeta, not top-level.
+        result = scoring.score_audience_quality(1000, {"authorMeta": {"following": 250}})
+        self.assertEqual(result["score"], 80)  # ratio 4.0 * 20
+
 
 class FollowerGrowthTests(unittest.TestCase):
     def test_percentage_change(self):
