@@ -70,6 +70,7 @@ def to_entity(item: dict) -> dict:
         "follower_count": meta.get("followersCount") or meta.get("followerCount"),
         "email_norm": contacts["email"].lower() or None,
         "phone_norm": contacts["phone"] or None,
+        "wechat_norm": contacts["wechat"] or None,
         "source_url": f"https://www.douyin.com/user/{sec_uid}" if sec_uid else None,
     }
 

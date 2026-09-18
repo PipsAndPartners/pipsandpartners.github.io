@@ -53,6 +53,15 @@ class DouyinTests(unittest.TestCase):
         self.assertEqual(entity["phone_norm"], "0912345678")
         self.assertEqual(entity["source_url"], "https://www.douyin.com/user/SEC")
 
+    def test_to_entity_pulls_chinese_wechat_and_phone(self):
+        entity = douyin.to_entity({"authorMeta": {
+            "secUid": "SEC2", "uniqueId": "cn", "nickname": "金", "followerCount": 800,
+            "signature": "现货黄金分析 微信：GoldFx88 电话13812345678",
+        }})
+        self.assertEqual(entity["wechat_norm"], "GoldFx88")
+        self.assertEqual(entity["phone_norm"], "13812345678")
+        self.assertIsNone(entity["email_norm"])
+
     def test_extract_engagement_reads_statistics(self):
         got = douyin.extract_engagement({"statistics": {"diggCount": 10, "commentCount": 3, "shareCount": 2}})
         self.assertEqual(got, {"likes": 10, "shares": 2, "comments": 3})

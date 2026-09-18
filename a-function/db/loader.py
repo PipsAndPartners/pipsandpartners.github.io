@@ -18,9 +18,9 @@ LOG = logging.getLogger(__name__)
 UPSERT_ENTITY = """
     INSERT INTO entities (
         platform, platform_id, handle, display_name, bio_text,
-        website_url, avatar_url, follower_count, email_norm, phone_norm, source_url
+        website_url, avatar_url, follower_count, email_norm, phone_norm, wechat_norm, source_url
     )
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     ON CONFLICT (platform, platform_id) DO UPDATE SET
         handle = EXCLUDED.handle,
         display_name = EXCLUDED.display_name,
@@ -31,6 +31,7 @@ UPSERT_ENTITY = """
         email_norm = EXCLUDED.email_norm,
         -- don't blank an existing phone with a NULL from a source that lacks one
         phone_norm = COALESCE(EXCLUDED.phone_norm, entities.phone_norm),
+        wechat_norm = COALESCE(EXCLUDED.wechat_norm, entities.wechat_norm),
         source_url = EXCLUDED.source_url,
         last_seen_at = now()
     RETURNING entity_id, (xmax = 0) AS inserted
@@ -94,6 +95,7 @@ def load_platform_results(conn: Connection, platform: str, items: list[dict], ru
                             entity.get("follower_count"),
                             entity.get("email_norm"),
                             entity.get("phone_norm"),
+                            entity.get("wechat_norm"),
                             entity.get("source_url"),
                         ),
                     )

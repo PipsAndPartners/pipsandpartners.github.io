@@ -17,6 +17,12 @@ class CreatorRelevanceTests(unittest.TestCase):
         result = scoring.score_creator_relevance("just a gardener")
         self.assertEqual(result["score"], 0)
 
+    def test_matches_gold_and_chinese_terms(self):
+        # gold-analysis bios (English or Chinese) must clear the gate's floor (>=20),
+        # otherwise the filter gate drops every gold creator.
+        self.assertGreaterEqual(scoring.score_creator_relevance("现货黄金分析师")["score"], 20)
+        self.assertGreaterEqual(scoring.score_creator_relevance("XAUUSD gold trading")["score"], 20)
+
     def test_none_text_is_safe(self):
         self.assertEqual(scoring.score_creator_relevance(None)["score"], 0)
 

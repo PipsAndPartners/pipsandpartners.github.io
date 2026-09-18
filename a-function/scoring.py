@@ -26,6 +26,19 @@ RELEVANCE_KEYWORDS = {
     "financial markets": 10,
     "business development": 10,
     "investment": 8,
+    # Gold / precious-metals sub-niche (XAUUSD is a core broker instrument), plus
+    # the Chinese terms gold-analysis creators use in their Douyin bios -- without
+    # these a 黄金分析 bio scores 0 and the filter gate drops every gold creator.
+    "gold": 20,
+    "xauusd": 20,
+    "黄金": 20,          # gold
+    "现货黄金": 20,       # spot gold
+    "黄金分析": 30,       # gold analysis (strong niche signal)
+    "金价": 15,          # gold price
+    "贵金属": 15,         # precious metals
+    "外汇": 20,          # forex (Chinese)
+    "原油": 10,          # crude oil (usually paired with gold analysis)
+    "交易": 10,          # trading (Chinese)
 }
 
 # Common scam-adjacent phrasing in the forex/trading niche -- a crude red-flag

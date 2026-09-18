@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS entities (
     follower_count  INT,
     phone_norm      TEXT,                   -- chuẩn hoá E.164, null nếu chưa có
     email_norm      TEXT,                   -- lowercase trimmed, null nếu chưa có
+    wechat_norm     TEXT,                   -- WeChat ID (kênh liên lạc chính của Douyin), null nếu chưa có
     first_seen_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     last_enriched   TIMESTAMPTZ,            -- NULL = chưa qua enrichment, dùng cho watermark
     last_seen_at    TIMESTAMPTZ NOT NULL DEFAULT now(),

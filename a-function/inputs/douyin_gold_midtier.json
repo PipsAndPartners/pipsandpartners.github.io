@@ -1,0 +1,11 @@
+{
+  "keywords": ["黄金分析", "现货黄金", "黄金走势", "金价分析", "黄金交易策略", "贵金属投资", "XAUUSD"],
+  "maxResultsPerQuery": 50,
+  "sort": "general",
+  "publishTime": "half_year",
+  "duration": "unlimited",
+  "shouldDownloadVideos": false,
+  "shouldDownloadCovers": false,
+  "shouldDownloadSlideshowImages": false,
+  "videoKvStoreName": ""
+}

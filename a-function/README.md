@@ -242,6 +242,21 @@ Useful flags:
 - `--platform facebook` searches **Pages** (`apify/facebook-search-scraper`). On Facebook these are mostly brokers' own official pages, so it's best treated as *broker/competitor landscape*, not IB discovery.
 - `--platform facebook_post` searches public **posts** by keyword (`scraper_one/facebook-posts-search`) and records each post's **author** — the individual people posting about forex/XTB, i.e. the actual IB candidates — with per-post engagement. Authors land in `staging_facebook_post` / `entities.platform = 'facebook_post'` (apply `db/08_staging_facebook_post.sql` once).
 
+### Douyin gold-market channel
+
+One command runs the gold-analyst discovery channel end to end — scrape → stage/entities → filter gate — for **mid-tier** creators (500–5k followers by default):
+```
+.\.venv\Scripts\python.exe -m discovery.douyin
+```
+- Keywords come from `inputs\douyin_gold_midtier.json` (黄金分析 / 现货黄金 / XAUUSD …); override with `--keywords 黄金分析 现货黄金` or point `--preset` at another JSON.
+- Follower window is `--min-followers 500 --max-followers 5000`; the gate also needs a gold/forex relevance signal in the bio (see `scoring.RELEVANCE_KEYWORDS`, which now covers gold + Chinese trading terms), so off-niche accounts are dropped before any paid enrichment.
+- `--no-db` writes only the raw JSON.
+
+Then rank the gated set into a contactable shortlist (email/phone are only what creators published in their own bio):
+```
+.\.venv\Scripts\python.exe -m discovery.shortlist --platforms douyin --market cn --min-followers 500
+```
+
 ### IB shortlist
 
 Turn everything discovered into a ranked, deduped shortlist for one broker + market (drops the broker's own pages, rival brokers, and out-of-market accounts):
