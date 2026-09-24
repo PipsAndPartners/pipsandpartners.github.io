@@ -2,7 +2,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from discovery.youtube_data_api import discover, filter_overseas_vietnamese, rank_channels
+from discovery.youtube_data_api import QuotaExceededError, discover, filter_overseas_vietnamese, rank_channels
 from platforms.youtube import to_entity
 
 
@@ -41,6 +41,34 @@ class YouTubeDataApiTests(unittest.TestCase):
         self.assertEqual(result["skipped_fresh"], 1)
         ids = {item.get("id") for item in result["items"]}
         self.assertEqual(ids, {"UC2"})  # fresh UC1 dropped before channels.list
+
+    def test_quota_exhausted_mid_search_keeps_earlier_keywords_results(self):
+        responses = [
+            {"items": [{"id": {"channelId": "UC1"}, "snippet": {"title": "A"}}]},  # keyword "forex" search
+            QuotaExceededError("daily search.list quota exhausted"),  # keyword "trading" search
+            {"items": [{"id": "UC1", "snippet": {"title": "A"}, "statistics": {"subscriberCount": "1"}}]},
+        ]
+        with patch.dict(os.environ, {"YOUTUBE_API_KEY": "k"}), patch(
+            "discovery.youtube_data_api.request", side_effect=responses
+        ):
+            result = discover(["forex", "trading", "invest"], max_results=10)
+        self.assertTrue(result["quota_exhausted"])
+        self.assertEqual(result["remaining_keywords"], ["trading", "invest"])
+        self.assertEqual({item["id"] for item in result["items"]}, {"UC1"})
+        self.assertEqual(result["quota_units"], 101)  # 1 search (100) + 1 channels.list batch (1)
+
+    def test_quota_exhausted_on_channels_list_still_returns_stub_channels(self):
+        responses = [
+            {"items": [{"id": {"channelId": "UC1"}, "snippet": {"title": "A"}}]},
+            QuotaExceededError("shared 10,000-unit bucket exhausted"),
+        ]
+        with patch.dict(os.environ, {"YOUTUBE_API_KEY": "k"}), patch(
+            "discovery.youtube_data_api.request", side_effect=responses
+        ):
+            result = discover(["forex"], max_results=10)
+        self.assertTrue(result["quota_exhausted"])
+        self.assertEqual(result["remaining_keywords"], [])
+        self.assertEqual(result["items"], [{"id": "UC1", "keywords": ["forex"]}])
 
     def test_region_and_language_bias_are_passed(self):
         responses = [{"items": []}]

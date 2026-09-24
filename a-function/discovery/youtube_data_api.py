@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
@@ -59,12 +60,37 @@ class YouTubeApiError(RuntimeError):
     pass
 
 
+class QuotaExceededError(YouTubeApiError):
+    """The project's daily quota (search.list's own 100/day bucket, or the
+    shared 10,000-unit bucket) is exhausted. Callers should stop spending more
+    quota, not treat this like an ordinary request failure."""
+
+
+def _open(url: str):
+    with urllib.request.urlopen(url, timeout=30) as response:
+        return json.load(response)
+
+
 def request(endpoint: str, params: dict) -> dict:
     query = urllib.parse.urlencode(params)
     url = f"{API_ROOT}/{endpoint}?{query}"
     try:
-        with urllib.request.urlopen(url, timeout=30) as response:
-            return json.load(response)
+        return _open(url)
+    except urllib.error.HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        try:
+            reason = json.loads(body)["error"]["errors"][0]["reason"]
+        except Exception:  # noqa: BLE001 - any parse failure just means "unknown reason"
+            reason = None
+        if reason in ("quotaExceeded", "dailyLimitExceeded"):
+            raise QuotaExceededError(f"YouTube API quota exhausted ({reason}): {body}") from error
+        if reason == "rateLimitExceeded":  # short-window 429, not a daily quota problem
+            time.sleep(2)
+            try:
+                return _open(url)
+            except Exception as retry_error:
+                raise YouTubeApiError(f"YouTube API request failed after retry: {retry_error}") from retry_error
+        raise YouTubeApiError(f"YouTube API request failed: {error} - {body}") from error
     except Exception as error:
         raise YouTubeApiError(f"YouTube API request failed: {error}") from error
 
@@ -79,7 +105,12 @@ def discover(keywords: list[str], max_results: int = 25,
     channels: dict[str, dict] = {}
     quota_units = 0
     searches = []
-    for keyword in keywords:
+    remaining_keywords: list[str] = []
+    quota_exhausted = False
+    for i, keyword in enumerate(keywords):
+        if quota_exhausted:
+            remaining_keywords.append(keyword)
+            continue
         params = {
             "part": "snippet",
             "type": "channel",
@@ -93,10 +124,20 @@ def discover(keywords: list[str], max_results: int = 25,
             params["regionCode"] = region_code
         if relevance_language:
             params["relevanceLanguage"] = relevance_language
-        result = request("search", params)
+        try:
+            result = request("search", params)
+        except QuotaExceededError:
+            # Daily search.list quota just ran out mid-run. Don't let one keyword's
+            # failure throw away every channel already found by the keywords before
+            # it -- stop searching, keep what we have, and let main() report which
+            # keywords still need a run (tomorrow, once quota resets).
+            quota_exhausted = True
+            remaining_keywords.append(keyword)
+            continue
         quota_units += SEARCH_COST
         searches.append({"keyword": keyword, "raw": result})
-        time.sleep(0.5)  # back-to-back search.list calls trip Google's short-window rate limit (429)
+        if i < len(keywords) - 1:
+            time.sleep(0.5)  # back-to-back search.list calls trip Google's short-window rate limit (429)
         for item in result.get("items", []):
             channel_id = item.get("id", {}).get("channelId")
             if channel_id:
@@ -114,14 +155,21 @@ def discover(keywords: list[str], max_results: int = 25,
     channel_ids = list(channels)
     for start in range(0, len(channel_ids), 50):
         batch = channel_ids[start:start + 50]
-        result = request(
-            "channels",
-            {
-                "part": "snippet,statistics,brandingSettings",
-                "id": ",".join(batch),
-                "key": api_key,
-            },
-        )
+        try:
+            result = request(
+                "channels",
+                {
+                    "part": "snippet,statistics,brandingSettings",
+                    "id": ",".join(batch),
+                    "key": api_key,
+                },
+            )
+        except QuotaExceededError:
+            # The shared 10,000-unit bucket ran dry. The channels in this and any
+            # later batch are still returned (bare {id, keywords} stubs) instead of
+            # being dropped -- save_to_db/rank_channels just see less detail on them.
+            quota_exhausted = True
+            break
         quota_units += CHANNEL_COST
         for item in result.get("items", []):
             channel_id = item["id"]
@@ -136,6 +184,8 @@ def discover(keywords: list[str], max_results: int = 25,
         "skipped_fresh": len(skipped),
         "quota_units": quota_units,
         "quota_model": {"search.list": SEARCH_COST, "channels.list": CHANNEL_COST},
+        "quota_exhausted": quota_exhausted,
+        "remaining_keywords": remaining_keywords,
     }
 
 
@@ -210,7 +260,12 @@ def main() -> None:
     parser.add_argument("--keywords-file", type=Path, default=None,
                         help="read search terms from a file, one per line (# = comment); "
                              "merged with any positional keywords")
-    parser.add_argument("--max-results", type=int, default=25)
+    parser.add_argument("--max-results", type=int, default=50, help="channels per keyword (default 50, the API max); "
+                                                                     "same 1 search.list call either way, so there's no reason to ask for fewer")
+    parser.add_argument("--max-searches", type=int, default=None,
+                        help="search at most this many keywords this run (search.list has its own "
+                             "100-call/day bucket, shared with the web console's ad hoc searches); "
+                             "leftover keywords are printed so you can pick them up on a later run")
     parser.add_argument("--output", type=Path, default=Path("results/youtube_data_api.json"))
     parser.add_argument("--no-db", action="store_true")
     parser.add_argument("--overseas-vietnamese", action="store_true")
@@ -236,6 +291,11 @@ def main() -> None:
                 keywords.append(line)
     if not keywords:
         parser.error("no keywords: pass search terms or --keywords-file")
+
+    deferred_keywords: list[str] = []
+    if args.max_searches is not None and len(keywords) > args.max_searches:
+        keywords, deferred_keywords = keywords[:args.max_searches], keywords[args.max_searches:]
+        print(f"--max-searches {args.max_searches}: deferring {len(deferred_keywords)} keyword(s) to a later run")
 
     # Watermark: channels loaded within the refresh window are skipped (see discover).
     skip_ids: set[str] = set()
@@ -277,11 +337,18 @@ def main() -> None:
 
     discovered = len(result["items"])
     result["items"] = rank_channels(result["items"], args.top)  # top-N is only the export view
+    not_run = result.get("remaining_keywords", []) + deferred_keywords
+    result["remaining_keywords"] = not_run
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({"discovered": discovered, "exported_top": len(result["items"]),
                       "skipped_fresh": result.get("skipped_fresh", 0),
-                      "quota_units": result["quota_units"], "loaded": loaded}))
+                      "quota_units": result["quota_units"], "loaded": loaded,
+                      "quota_exhausted": result.get("quota_exhausted", False)}))
+    if result.get("quota_exhausted"):
+        print("search.list quota ran out mid-run -- results already found were kept and loaded.")
+    if not_run:
+        print(f"not searched this run ({len(not_run)}): " + " | ".join(not_run))
     print(f"saved -> {args.output}")
 
 
