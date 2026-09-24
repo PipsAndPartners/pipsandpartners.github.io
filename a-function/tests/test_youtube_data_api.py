@@ -28,6 +28,20 @@ class YouTubeDataApiTests(unittest.TestCase):
         self.assertEqual(result["items"][0]["id"], "UC1")
         self.assertEqual(request.call_count, 2)
 
+    def test_skip_ids_drops_fresh_channels(self):
+        responses = [
+            {"items": [{"id": {"channelId": "UC1"}, "snippet": {"title": "A"}},
+                       {"id": {"channelId": "UC2"}, "snippet": {"title": "B"}}]},
+            {"items": [{"id": "UC2", "snippet": {"title": "B"}, "statistics": {"subscriberCount": "5"}}]},
+        ]
+        with patch.dict(os.environ, {"YOUTUBE_API_KEY": "k"}), patch(
+            "discovery.youtube_data_api.request", side_effect=responses
+        ):
+            result = discover(["forex"], max_results=10, skip_ids={"UC1"})
+        self.assertEqual(result["skipped_fresh"], 1)
+        ids = {item.get("id") for item in result["items"]}
+        self.assertEqual(ids, {"UC2"})  # fresh UC1 dropped before channels.list
+
     def test_region_and_language_bias_are_passed(self):
         responses = [{"items": []}]
         with patch.dict(os.environ, {"YOUTUBE_API_KEY": "k"}), patch(
