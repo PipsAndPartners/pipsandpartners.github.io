@@ -1,6 +1,6 @@
 import unittest
 
-from platforms import twitter, douyin, youtube, facebook, facebook_post, tiktok, linkedin
+from platforms import twitter, douyin, youtube, facebook, facebook_post, tiktok, linkedin, telegram
 
 
 class TwitterTests(unittest.TestCase):
@@ -86,6 +86,12 @@ class TikTokTests(unittest.TestCase):
         self.assertEqual(entity["email_norm"], "fx@mail.com")
         self.assertEqual(entity["phone_norm"], "0912345678")
         self.assertEqual(entity["source_url"], "https://www.tiktok.com/@fxguy")
+
+    def test_discovery_is_one_row_per_profile_enrichment_samples_videos(self):
+        self.assertEqual(tiktok.build_input({})["resultsPerPage"], 1)
+        enrich = tiktok.build_input({"usernames": ["fxguy"]})
+        self.assertEqual(enrich["profiles"], ["fxguy"])
+        self.assertEqual(enrich["resultsPerPage"], 5)
 
     def test_extract_engagement(self):
         got = tiktok.extract_engagement({"diggCount": 10, "commentCount": 5, "shareCount": 5})
@@ -239,6 +245,39 @@ class YouTubeTests(unittest.TestCase):
     def test_to_entity_missing_subscriber_count(self):
         entity = youtube.to_entity({"id": "UC1", "snippet": {}, "statistics": {}})
         self.assertIsNone(entity["follower_count"])
+
+
+class TelegramTests(unittest.TestCase):
+    def test_to_entity_maps_about_members_and_contacts(self):
+        entity = telegram.to_entity({
+            "platform_id": "12345",
+            "username": "fx_vn",
+            "title": "Forex VN",
+            "about": "Liên hệ admin @fx_admin, Zalo 0912345678, mail fx@example.com",
+            "participants_count": 42000,
+        })
+        self.assertEqual(entity["platform_id"], "12345")
+        self.assertEqual(entity["handle"], "fx_vn")
+        self.assertEqual(entity["bio_text"], "Liên hệ admin @fx_admin, Zalo 0912345678, mail fx@example.com")
+        self.assertEqual(entity["follower_count"], 42000)
+        self.assertEqual(entity["email_norm"], "fx@example.com")
+        self.assertEqual(entity["phone_norm"], "0912345678")
+        self.assertEqual(entity["source_url"], "https://t.me/fx_vn")
+
+    def test_to_entity_shallow_search_hit_has_no_contacts(self):
+        # keyword entity-search hits carry no description -> no regression vs the old stub
+        entity = telegram.to_entity({"platform_id": "1", "username": "x", "title": "X"})
+        self.assertIsNone(entity["email_norm"])
+        self.assertIsNone(entity["phone_norm"])
+        self.assertIsNone(entity["follower_count"])
+
+    def test_extract_related_links_pulls_description_links(self):
+        links = telegram.extract_related_links({
+            "about": "FB https://facebook.com/fxvn contact @fx_admin and t.me/fxsignals",
+        })
+        urls = {link["url"] for link in links}
+        self.assertIn("https://facebook.com/fxvn", urls)
+        self.assertIn("https://t.me/fx_admin", urls)
 
 
 if __name__ == "__main__":

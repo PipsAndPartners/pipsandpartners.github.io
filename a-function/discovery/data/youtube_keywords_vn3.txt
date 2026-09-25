@@ -1,0 +1,47 @@
+# Round 2 YouTube keywords (2026-09-23). Curated manually on top of
+# discovery/keyword_enrich.py's autocomplete output (results/keyword_enrich.json),
+# de-duplicated against the 87 keywords already searched (see staging_youtube.raw
+# -> discovery_keywords). Two families: (1) forex/finance niches not yet
+# searched, (2) overseas-Vietnamese geography beyond Australia (already covered
+# by youtube_keywords_au*.txt).
+
+# --- 1. forex/finance niches not yet searched ---
+hoàn phí forex
+review sàn forex
+copy trade forex
+robot forex tự động
+tín hiệu forex vip
+mentor forex việt nam
+khóa học forex online
+dạy đầu tư vàng
+giao dịch phái sinh vàng
+cộng tác viên forex
+đại lý forex việt nam
+giới thiệu sàn forex hoa hồng
+làm ib forex
+kiếm tiền từ forex
+thu nhập từ forex
+sàn giao dịch tiền ảo việt nam
+đầu tư crypto việt nam
+học chứng khoán phái sinh
+cộng đồng đầu tư tài chính
+tâm lý giao dịch forex
+quản lý vốn forex
+sàn forex uy tín 2026
+sàn forex nạp rút nhanh
+broker forex cho người việt
+
+# --- 2. overseas Vietnamese, non-Australia geography ---
+người việt ở mỹ đầu tư tài chính
+trader việt ở nhật
+việt kiều đầu tư forex
+du học sinh đầu tư tài chính
+người việt ở đức đầu tư
+người việt ở canada đầu tư tài chính
+forex người việt ở anh
+trader việt ở hàn quốc
+người việt ở châu âu đầu tư
+việt kiều mỹ đầu tư chứng khoán
+người việt ở singapore đầu tư
+người việt ở dubai đầu tư
+cộng đồng người việt hải ngoại đầu tư

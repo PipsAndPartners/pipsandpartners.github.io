@@ -1,5 +1,5 @@
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import scoring
 
@@ -99,6 +99,89 @@ class PostPriceTests(unittest.TestCase):
 
     def test_no_followers(self):
         self.assertIsNone(scoring.score_estimated_post_price(None, None)["value_usd"])
+
+
+class FakeAudienceTests(unittest.TestCase):
+    @staticmethod
+    def _raw(subs, views, videos, hidden=False):
+        return {"statistics": {"subscriberCount": str(subs), "viewCount": str(views),
+                               "videoCount": str(videos), "hiddenSubscriberCount": hidden}}
+
+    def test_organic_channel_low_risk(self):
+        # avg video seen by 20% of subs
+        self.assertEqual(scoring.score_fake_audience(self._raw(10000, 200000, 100))["score"], 0)
+
+    def test_bought_subs_high_risk(self):
+        # avg video seen by 1% of subs
+        self.assertEqual(scoring.score_fake_audience(self._raw(100000, 100000 * 50, 5000))["score"], 100)
+
+    def test_views_below_subs_flagged(self):
+        result = scoring.score_fake_audience(self._raw(50000, 40000, 3))
+        self.assertGreaterEqual(result["score"], 90)
+        self.assertIn("lifetime views", result["note"])
+
+    def test_not_computable(self):
+        self.assertIsNone(scoring.score_fake_audience({})["score"])
+        self.assertIsNone(scoring.score_fake_audience(self._raw(1000, 50000, 10, hidden=True))["score"])
+        self.assertIsNone(scoring.score_fake_audience(self._raw(1000, 50000, 2))["score"])
+
+    def test_composite_uses_inverted_risk(self):
+        entity = {"display_name": "x", "follower_count": 100000}
+        result = scoring.score_entity(entity, raw=self._raw(100000, 100000 * 50, 5000))
+        self.assertEqual(result["fake_audience_signal"], 100)
+        self.assertEqual(result["data_completeness"], round(3 / 7, 2))
+
+
+class FakeAudienceFromVideosTests(unittest.TestCase):
+    NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def _video(self, views, likes=None, comments=None, days_old=30, duration="PT10M0S"):
+        stats = {"viewCount": str(views)}
+        if likes is not None:
+            stats["likeCount"] = str(likes)
+        if comments is not None:
+            stats["commentCount"] = str(comments)
+        return {
+            "snippet": {"publishedAt": (self.NOW - timedelta(days=days_old)).isoformat()},
+            "statistics": stats,
+            "contentDetails": {"duration": duration},
+        }
+
+    def test_organic_videos_low_risk(self):
+        # 20% of subs watch, healthy like/comment ratios
+        videos = [self._video(2000, likes=100, comments=10) for _ in range(5)]
+        result = scoring.score_fake_audience({"statistics": {"subscriberCount": "10000"}}, videos, now=self.NOW)
+        self.assertLess(result["score"], 40)
+        self.assertIn("median views/video", result["note"])
+
+    def test_bought_views_no_engagement(self):
+        # views present but essentially no likes -> bought/inactive views
+        videos = [self._video(5000, likes=2, comments=0) for _ in range(5)]
+        result = scoring.score_fake_audience({"statistics": {"subscriberCount": "10000"}}, videos, now=self.NOW)
+        self.assertGreaterEqual(result["score"], 70)
+
+    def test_shorts_and_fresh_videos_excluded(self):
+        videos = [self._video(1, duration="PT30S")] + [self._video(1, days_old=1)]
+        result = scoring.score_fake_audience({"statistics": {"subscriberCount": "10000"}}, videos, now=self.NOW)
+        # falls back to channel totals since no usable per-video data
+        self.assertIn("no per-video stats collected yet", result["note"])
+
+    def test_view_spike_outlier_bumps_risk(self):
+        videos = [self._video(1000, likes=50, comments=5) for _ in range(5)]
+        videos.append(self._video(50000, likes=2500, comments=250))
+        with_spike = scoring.score_fake_audience({"statistics": {"subscriberCount": "10000"}}, videos, now=self.NOW)
+        without_spike = scoring.score_fake_audience(
+            {"statistics": {"subscriberCount": "10000"}}, videos[:5], now=self.NOW
+        )
+        self.assertGreaterEqual(with_spike["score"], without_spike["score"])
+        self.assertIn("outlier", with_spike["note"])
+
+    def test_engagement_rate_derived_from_videos_when_no_posts(self):
+        videos = [self._video(2000, likes=100, comments=10) for _ in range(5)]
+        entity = {"display_name": "x", "follower_count": 10000}
+        result = scoring.score_entity(entity, raw={"statistics": {"subscriberCount": "10000"}}, videos=videos)
+        self.assertIsNotNone(result["engagement_rate"])
+        self.assertGreater(result["engagement_rate"], 0)
 
 
 class ScoreEntityTests(unittest.TestCase):

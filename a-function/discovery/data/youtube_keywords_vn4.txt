@@ -1,0 +1,19 @@
+# Round 3 YouTube keywords (2026-09-23, same-day top-up after quota reset).
+# De-duplicated against the 124 keywords already searched in rounds 1-2
+# (youtube_keywords_au*.txt, youtube_keywords_vn_adjacent.txt, youtube_keywords_vn3.txt).
+# Kept tight (14 terms, ~1400 quota units) to fit the day's remaining budget.
+
+đầu tư crypto người việt hải ngoại
+sàn giao dịch forex quốc tế
+forex signal vip việt nam
+review sàn giao dịch forex 2026
+hướng dẫn đầu tư forex cho người mới
+forex trader việt nam thành công
+đầu tư ngoại hối cho người mới bắt đầu
+cộng đồng trader việt nam
+người việt ở séc đầu tư
+người việt ở ba lan đầu tư
+trader việt ở đài loan
+việt kiều đầu tư crypto
+sàn forex quốc tế uy tín
+kiếm tiền từ trading

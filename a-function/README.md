@@ -121,21 +121,28 @@ Already done on this machine, listed here so you know what exists:
 - Schema applied (tables: `staging_<platform>`, `entities`, `entity_links`, `entity_scores`, `entity_follower_history`)
 - `.env` holds your Apify token + database connection string (never commit this file — it's gitignored)
 
-If you ever need to reapply the schema from scratch:
+If you ever need to reapply the schema from scratch (e.g. a new machine or a hosted Postgres; for a hosted one keep `?sslmode=require` on `DATABASE_URL`), run **all** of these, in order. `psql` isn't on PATH, so `.env` sets `PSQL_PATH`. Skipping 06–11 leaves out the login table, `staging_facebook_post`, `entities.contacts`, the WeChat/Telegram indexes and the query watermark, and the loader then fails. This list rebuilt a schema identical to the live one on 2026-09-23 (17 tables, 138 columns, 33 indexes, 30 constraints). `02_resolve.sql` (resolve logic) and `03_seed_test_data.sql` (test seed) are only run when needed.
 ```
 .\.venv\Scripts\python.exe db\run_sql_file.py db\01_schema.sql
 .\.venv\Scripts\python.exe db\run_sql_file.py db\04_scores.sql
 .\.venv\Scripts\python.exe db\run_sql_file.py db\05_follower_history.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\06_users.sql
 .\.venv\Scripts\python.exe db\run_sql_file.py db\07_staging_telegram.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\08_staging_facebook_post.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\09_entities_wechat.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\10_entity_contacts.sql
+.\.venv\Scripts\python.exe db\run_sql_file.py db\11_discovery_watermark.sql
 ```
 
 ### Starting Postgres
 
-Postgres runs as a plain background process here (not a Windows service, since this machine doesn't have admin rights to install one). **It does not start automatically** — run this once per computer restart:
+Postgres runs as a plain background process here (not a Windows service, since this machine doesn't have admin rights to install one). A shortcut in the user's Startup folder (`PipsAndPartners Postgres.lnk`) runs `db\start_postgres.cmd` with a **hidden** window at every Windows logon. That script starts the server, then takes the day's backup. To run it by hand:
 ```
 .\db\start_postgres.ps1
 ```
-It's safe to run even if already running (just prints "accepting connections").
+It's safe to run even if already running (just prints "accepting connections"). Don't start it from a terminal you'll close: the server stays attached to that console, so closing the window kills it uncleanly. The log showed 8 unclean shutdowns vs 1 clean between 08-27 and 09-23. WAL recovery has handled every one so far.
+
+**Backups.** `python -m db.backup` does a `pg_dump` to `%OneDrive%\PipsAndPartners\db_backups`, verifies it is readable, and keeps the newest 14 (~5 MB each). `--daily` (used by the startup script) skips it if today's dump already exists. A full restore into a scratch database was checked row-for-row on 2026-09-23; see the module docstring for the restore command. To stop autostart, delete the shortcut from `shell:startup`.
 
 ## Telegram discovery worker
 
@@ -154,6 +161,63 @@ from `.telegram_frontier.json` after an interrupted run.
 Optional limits are `TELEGRAM_MAX_DEPTH`, `TELEGRAM_MAX_CHANNELS_PER_RUN`,
 `TELEGRAM_MSG_SCAN_LIMIT`, `TELEGRAM_FLOOD_ABORT_SECONDS`, and `TELEGRAM_MIN_SLEEP`.
 Export staging rows as JSONL and compare them with `scripts/telegram_coverage_report.py`.
+
+### Keyword channel discovery + description contacts
+
+`discovery.telegram.channel_enrich` is the keyword-first counterpart of the
+YouTube contact enrichment: it searches public channels/groups by keyword, pulls
+each hit's full record for its description (`about`) and member count, keeps only
+Vietnamese channels above a member floor, and loads them so the owner's direct
+contacts pasted in the description (email/phone/Zalo/`@admin`/Facebook/…) are
+extracted into `entities` and surfaced as related links in the report.
+
+    # preview Vietnamese forex channels with >30k members, write nothing:
+    \.\.venv\Scripts\python.exe -m discovery.telegram.channel_enrich --dry-run
+    # discover + persist them:
+    \.\.venv\Scripts\python.exe -m discovery.telegram.channel_enrich
+
+Flags: `--min-followers` (default 30000), `--per-keyword`, `--limit`,
+`--include-brokers` (add broker brand names as search terms),
+`--include-non-vietnamese`, `--refresh-after` / `--force` (see "Dedup" below).
+Pass your own `keywords` as positional args to override the default niche set.
+
+### Dedup: no duplicate rows, no wasted re-fetching, cross-platform matching
+
+Duplicate data is handled at three layers, so every search function stays clean
+on re-runs:
+
+1. **Row level** — `entities` has `UNIQUE (platform, platform_id)` and the loader
+   upserts (`ON CONFLICT DO UPDATE`), so re-discovering a channel updates its one
+   row; a duplicate row is impossible.
+2. **Cross-platform** — after every load (all platforms funnel through
+   `db/loader.py`), `db/resolve.py` runs automatically to link the same person
+   across networks by shared phone/email/website/handle/bio, so a lead already
+   captured on another platform is recognised, not re-added as an unrelated
+   duplicate. It is idempotent; run a full pass by hand with
+   `python -m db.resolve`.
+3. **Freshness watermark** — a discovery search skips re-fetching a channel it
+   already loaded within `--refresh-after` days (default **30**) before spending
+   the expensive per-channel call, and reports `new / refreshed / skipped`. Use
+   `--force` to re-fetch everything. `youtube_data_api` skips the same way
+   (`search.list` quota is still spent per keyword, but known channels aren't
+   re-processed).
+4. **Query watermark** (`discovery_watermark`, `db/11_discovery_watermark.sql`):
+   applies to the Apify actors, which charge per result and can't be told to
+   skip profiles we already have. `pipeline.py` records every `(platform, query)`
+   it runs with how many entities it returned and how many were new. On the
+   next run, before starting the actor, it drops a query that
+   - ran within **6 days** (so a weekly schedule still re-runs it), or
+   - is **saturated**: its last run returned entities but none new. It is then
+     skipped for **28 days**, which is what stops a weekly refresh re-buying the
+     same profiles.
+
+   If every query is dropped, the actor isn't started at all. A run that returned
+   nothing (blocked, actor limit) isn't recorded, so it gets retried. `--force`
+   ignores the watermark. New/returned counts are per query for TikTok (rows echo
+   `searchQuery`). Douyin, Facebook posts and LinkedIn don't echo it, so every
+   query of the run gets the run-level totals.
+5. **Downstream** — a known entity keeps its `stage`, so re-discovering it never
+   sends it through the gate, enrichment (`last_enriched`) or the LLM again.
 
 ## YouTube Data API v3 discovery
 
@@ -235,7 +299,30 @@ Useful flags:
 - `--search-query "your search"` — override the default search term (linkedin/twitter/facebook/facebook_post/tiktok/douyin — Douyin now searches by keyword, it no longer needs a profile URL)
 - `--usernames user1 user2` — scrape specific people instead of searching (instagram/tiktok/twitter)
 - `--urls https://...` — scrape specific profile URLs (instagram)
+- `--preset inputs/<file>.json` — use a saved actor input as-is instead of the platform default (single platform only). E.g. TikTok VN forex discovery (8 Vietnamese queries, profile search; leave `proxyCountryCode` unset — a VN proxy makes every profile search come back empty) → `staging_tiktok` + `entities`:
+  `.\.venv\Scripts\python.exe pipeline.py --platform tiktok --preset inputs\tiktok_forex_vn.json`
+- `--from-gate [--limit N]` — the paid **enrichment** pass (instagram/tiktok/twitter): look up only the handles the filter gate let through, then stamp them enriched so they are never paid for twice
 - `--no-db` — skip the Postgres load, JSON file only
+
+### Two phases: cheap discovery → filter gate → paid enrichment → LLM (E6 6.7 / 6.8)
+
+Discovery only collects a platform_id plus minimal identity (TikTok: one video row per profile). Anything that costs money per profile runs **after** `discovery.gate`, which uses only already-collected fields and never calls the network:
+
+- **IB/forex signal regex** (`gate.IB_SIGNAL_RE`): word-bounded, Vietnamese with or without diacritics — forex/ngoại hối, XAUUSD, hoàn phí/backcom/rebate, mã giới thiệu/ref link, prop firms, broker names in the bio… A hit clears the relevance floor on its own (the `scoring.py` lexicon has no Vietnamese terms, so VN forex bios used to score ~0).
+- **Obviously irrelevant** (`gate.IRRELEVANT_RE`): gold shops, immigration, property, general news, game-account shops, gambling, jobs… dropped unless the row also has an IB/forex signal.
+- **Thresholds**: followers (`--min-followers`), rival-broker pages, `--market vn`.
+
+Enrichment refuses to run while any row of that platform is still `stage='discovered'`. The LLM IB classifier (E8 8.2) must take its input from `gate.select_for_llm()` (CLI: `gate llm`) — gated rows re-checked on their post-enrichment fields plus an engagement floor (`--min-engagement`, default 0.5%, only where post data exists) — so only candidates past the cheap gate ever cost an LLM call.
+
+```
+.\.venv\Scripts\python.exe -m discovery.gate --platform tiktok gate --market vn --min-followers 5000
+.\.venv\Scripts\python.exe pipeline.py --platform tiktok --from-gate --limit 50
+.\.venv\Scripts\python.exe -m discovery.gate --platform youtube gate --market vn --min-followers 5000
+.\.venv\Scripts\python.exe -m discovery.youtube_video_enrich --limit 25
+.\.venv\Scripts\python.exe -m discovery.gate llm --market vn --min-followers 5000
+```
+
+The gate prints `enrichment_cut_pct`. On the 3,580 entities in the DB on 2026-09-23, `--market vn --min-followers 5000` let 143 through (**96.0%** cut; YouTube video enrichment ~242k → ~9k quota units) and 141 reach the LLM. `filter_gate` only touches `discovered` rows, so pick the thresholds before running it; re-gating means resetting `stage` to `discovered` first.
 
 ### Two Facebook channels
 
@@ -261,9 +348,51 @@ Then rank the gated set into a contactable shortlist (email/phone are only what 
 
 Turn everything discovered into a ranked, deduped shortlist for one broker + market (drops the broker's own pages, rival brokers, and out-of-market accounts):
 ```
-.\.venv\Scripts\python.exe -m discovery.shortlist --broker xtb --market vn --exclude-dir results\2026-09\2026-09-16 --top 10
+.\.venv\Scripts\python.exe -m discovery.shortlist --broker tmgm --market vn --exclude-dir results\2026-09\2026-09-16 --top 10
 ```
 Edit the broker exclusion list in `discovery/data/broker_brands.txt` (one brand per line, no code change needed).
+
+The output is an **Excel file** (`.xlsx`) by default, one row per KOL. Alongside the
+usual columns (rank / platform / name / handle / followers / relevance / email / …)
+it now also generates two send-ready columns:
+
+| Column | Meaning |
+|---|---|
+| **Subject for mail** | `<name> \| TMGM mời hợp tác.` |
+| **Content for mail** | the full Vietnamese outreach body (see `outreach/mailfields.py`), with the recipient's name filled in |
+
+The email body has one per-person slot, **AA** — "điểm nổi bật của họ liên quan
+sàn TMGM/forex". By default it's a generic phrase derived from the KOL's platform.
+To personalize it per KOL, pass a JSON map of `{handle-or-name: standout}`:
+```
+.\.venv\Scripts\python.exe -m discovery.shortlist --broker tmgm --market vn --standouts standouts.json --top 10
+```
+Pass `--output some\path\ib_shortlist.csv` if you want CSV instead of Excel.
+
+That Excel then feeds straight into `outreach.createmail` (Excel → Outlook `.eml`
+drafts) — it reads the `email`, `Subject for mail`, and `Content for mail` columns.
+See `outreach/README.md`.
+
+### Website enrichment (free -- no Apify/API quota)
+
+`discovery.website_enrich` crawls an entity's own website or bio-link page
+(linktr.ee, beacons.ai, …) for a missing email/phone -- the source neither
+`youtube_video_enrich` (video descriptions, paid quota) nor `member_enrich`
+(Apify Instagram, paid) covers. Candidate URLs come from `website_url`,
+`contacts.website`, and any bare URL pasted in `bio_text` (many YouTube
+channels only put their site in the About text). stdlib `urllib` only, no new
+dependency; every fetch is logged to `staging_contact_enrichment` as an audit
+trail and a 30-day cache.
+
+```
+.\.venv\Scripts\python.exe -m discovery.website_enrich --dry-run --limit 50
+.\.venv\Scripts\python.exe -m discovery.website_enrich --limit 200
+```
+
+`discovery.shortlist --enrich-websites` runs it on the selected rows before
+writing, so a still-missing email can get filled in the same pass. A link to
+another broker's referral program (`broker_ref` class) is recorded in
+`contacts.broker_ref`, not crawled or excluded.
 
 Score everyone currently in the database:
 ```
@@ -283,6 +412,52 @@ Typical workflow for a new batch:
 .\.venv\Scripts\python.exe db\export_report.py
 ```
 Then open `reports\leads_report.html`.
+
+---
+
+## Apify reference: reading run status + actor input schemas
+
+Team reference card (E6), not a build task. Checked against the live Apify API and our own runs on 2026-09-23.
+
+### Reading a run's status
+
+**Don't trust the status alone.** None of the 44 runs on our two active accounts (tokens #0 and #1, as of 2026-09-23) ended ABORTED or FAILED; every failure below still said **SUCCEEDED**. Read the run's *status message* (Console → run → top line, or `statusMessage` in the API) and the item count.
+
+| What you see | What it means | Real example |
+|---|---|---|
+| Succeeded in a few seconds, 0–1 items, status message names a limit ("used all 3 free runs", "free user run limit reached", "retry in …") | The **actor's own** free-plan cap, not our credit. Pick another actor or account | `zen-studio/douyin-search-scraper`, 3.2 s, 13 wasted runs on 2026-09-17/18; `harvestapi/linkedin-profile-search`, 4.6 s |
+| Succeeded in a few seconds, 0 requests, 0 items, no limit message | **Wrong input schema**: a key name the actor doesn't know, so it has nothing to do. Not a credit problem | — |
+| Succeeded after minutes, 0 items, log says `N requests: 0 succeeded, N failed` | **Blocked** (proxy / anti-bot). Change proxy settings, don't just retry | `clockworks/tiktok-scraper` with `proxyCountryCode: "VN"`: 221 s, 10/10 requests failed, "Scraped 0/2 search queries" |
+| The run never starts: `Your remaining usage of $X this billing cycle isn't enough for this run` | **Out of credit** on that token. Our CLIs use the first token in `APIFY_TOKENS`, so reorder the tokens or use `TokenPool.run_with_failover` | token #0, 2026-09-23 |
+| Aborted, and the log mentions usage/credit | Credit ran out **mid-run** | — |
+
+### Credit (Apify FREE plan, per account, as of 2026-09-23)
+
+| Token (order in `APIFY_TOKENS`) | Used / monthly limit | Cycle |
+|---|---|---|
+| #0 | **$10.00 / $10** (exhausted) | 08-24 → 09-23 |
+| #1 | $4.13 / $10 | 08-26 → 09-25 |
+| #2 | $0.00 / $5 | 09-16 → 10-15 |
+| #3 | $0.00 / $10 | 09-16 → 10-15 |
+
+The single most expensive run so far: `apify/facebook-search-scraper`, $1.59 for one 280-request run. Check usage at console.apify.com → Billing, or `GET /v2/users/me/limits`.
+
+### Actor input schemas
+
+**Always take the schema from the actor's Input tab** (or `GET /v2/acts/<user>~<name>/builds/default` → `inputSchema`). Key names differ per actor (`searchQueries` vs `keywords` vs `query` vs `queries`), and a wrong one fails silently (see above). Every `DEFAULT_INPUT` in `platforms/*.py` was checked against the live schema on 2026-09-23: no unknown keys, no missing required fields.
+
+| Actor | Used by | Price (FREE tier) | Keys we set (**required**) |
+|---|---|---|---|
+| `clockworks/tiktok-scraper` | `platforms/tiktok.py` | $0.0037 / result (1 result = 1 video row) | `searchQueries`, `searchSection` (`/user`), `maxProfilesPerQuery`, `resultsPerPage`, `profiles` (enrichment). Leave `proxyCountryCode` unset |
+| `zen-studio/douyin-search-scraper` | `platforms/douyin.py` | $0.00499 / result; actor caps FREE at 3 runs | **`keywords`**, `maxResultsPerQuery`, `sort`, `publishTime`, `duration` |
+| `apify/facebook-search-scraper` | `platforms/facebook.py` | $0.012 / page | **`categories`**, `locations`, `resultsLimit` |
+| `scraper_one/facebook-posts-search` | `platforms/facebook_post.py` | $0.004 / post | **`query`**, `resultsCount`, `location` |
+| `apify/instagram-profile-scraper` | `platforms/instagram.py`, `discovery/member_enrich.py` | $0.0026 / profile | **`usernames`** |
+| `harvestapi/linkedin-profile-search` (`M2FMdjRVeF1HPGFcc`) | `platforms/linkedin.py` | $0.10 / search page (25 profiles) | `searchQuery`, `currentJobTitles`, `locations`, `profileScraperMode`, `maxItems`, `startPage`, `takePages` |
+| `apidojo/tweet-scraper` | `platforms/twitter.py` | $0.0004 / tweet | `searchTerms` / `twitterHandles`, `maxItems` |
+| `apify/google-search-scraper` | `discovery/serp.py`, `discovery/keyword_campaign.py` | $0.0045 / results page | **`queries`** |
+| `streamers/youtube-scraper` | ad hoc (web console) | $0.004 / video | `searchQueries`, `maxResults`, **`maxResultsShorts`** (default 0: set it or you get no Shorts), `dateFilter` (hour/today/week/month/year). `dateFilter` filters *search* only, so it does nothing for `startUrls`. Don't combine it with `oldestPostDate` (which also forces sort = NEWEST) |
+| ~~`scrapeforge/facebook-search-posts`~~ | **don't use** | $0.0026 / result | FREE plan: 20 results per run and 1 run per 24 h. A second run "succeeds" instantly with nothing. Use `scraper_one/facebook-posts-search` |
 
 ---
 

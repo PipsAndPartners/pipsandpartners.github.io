@@ -62,3 +62,7 @@ gomarkets
 thinkmarkets
 admiral markets
 admirals
+xtb
+xm
+xmvietnam
+xm vietnam

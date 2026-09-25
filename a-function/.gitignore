@@ -9,3 +9,10 @@ reports/
 __pycache__/
 *.pyc
 web/last_run.json
+
+# outreach Graph tool
+outreach/.msal_cache.enc
+drafts.jsonl
+outreach/eml/
+backups/
+outreach/mailnow_standout.xlsx

@@ -1,4 +1,4 @@
-apify-client
+apify-client>=3
 python-dotenv
 flask
 psycopg[binary]
@@ -6,3 +6,6 @@ gunicorn
 cryptography
 telethon
 openpyxl
+mcp
+msal
+requests

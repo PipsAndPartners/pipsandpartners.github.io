@@ -1,8 +1,8 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from discovery.youtube_data_api import QuotaExceededError
-from discovery.youtube_video_enrich import recent_video_descriptions, uploads_playlist_ids
+from discovery.youtube_video_enrich import recent_videos, store_video_stats, uploads_playlist_ids
 
 
 class UploadsPlaylistIdsTests(unittest.TestCase):
@@ -28,33 +28,53 @@ class UploadsPlaylistIdsTests(unittest.TestCase):
         self.assertEqual(quota, 1)
 
 
-class RecentVideoDescriptionsTests(unittest.TestCase):
-    def test_combines_descriptions_from_the_uploads_playlist(self):
+class RecentVideosTests(unittest.TestCase):
+    def test_returns_full_video_resources_from_the_uploads_playlist(self):
         responses = [
             {"items": [{"contentDetails": {"videoId": "v1"}}, {"contentDetails": {"videoId": "v2"}}]},
-            {"items": [{"snippet": {"description": "contact: a@b.com"}},
-                       {"snippet": {"description": "Sydney AU"}}]},
+            {"items": [{"id": "v1", "snippet": {"description": "contact: a@b.com"},
+                        "statistics": {"viewCount": "100"}, "contentDetails": {"duration": "PT5M"}},
+                       {"id": "v2", "snippet": {"description": "Sydney AU"}}]},
         ]
         with patch("discovery.youtube_video_enrich.request", side_effect=responses) as request:
-            desc, quota = recent_video_descriptions("UU1", "k", max_videos=50)
-        self.assertIn("a@b.com", desc)
-        self.assertIn("Sydney AU", desc)
+            videos, quota = recent_videos("UU1", "k", max_videos=50)
+        self.assertEqual([v["id"] for v in videos], ["v1", "v2"])
+        self.assertEqual(videos[0]["statistics"]["viewCount"], "100")
         self.assertEqual(quota, 2)  # 1 playlistItems.list + 1 videos.list
         playlist_params = request.call_args_list[0].args[1]
         self.assertEqual(playlist_params["playlistId"], "UU1")
         self.assertEqual(playlist_params["maxResults"], 50)
+        # statistics+contentDetails ride along in videos.list's `part` for 0 extra quota
+        video_params = request.call_args_list[1].args[1]
+        self.assertEqual(video_params["part"], "snippet,statistics,contentDetails")
 
     def test_empty_playlist_costs_only_the_playlistItems_call(self):
         with patch("discovery.youtube_video_enrich.request", side_effect=[{"items": []}]) as request:
-            desc, quota = recent_video_descriptions("UU1", "k", max_videos=50)
-        self.assertEqual(desc, "")
+            videos, quota = recent_videos("UU1", "k", max_videos=50)
+        self.assertEqual(videos, [])
         self.assertEqual(quota, 1)
         request.assert_called_once()
 
     def test_quota_exceeded_propagates_to_the_caller(self):
         with patch("discovery.youtube_video_enrich.request", side_effect=QuotaExceededError("out")):
             with self.assertRaises(QuotaExceededError):
-                recent_video_descriptions("UU1", "k", max_videos=50)
+                recent_videos("UU1", "k", max_videos=50)
+
+
+class StoreVideoStatsTests(unittest.TestCase):
+    def test_inserts_one_row_per_video_with_an_id(self):
+        cur = MagicMock()
+        videos = [{"id": "v1", "snippet": {}}, {"id": "v2", "snippet": {}}, {"snippet": {}}]  # last has no id
+        store_video_stats(cur, "UC1", videos)
+        cur.executemany.assert_called_once()
+        sql, rows = cur.executemany.call_args.args
+        self.assertIn("staging_youtube_video", sql)
+        self.assertEqual([r[:2] for r in rows], [("UC1", "v1"), ("UC1", "v2")])
+
+    def test_no_videos_does_not_touch_the_cursor(self):
+        cur = MagicMock()
+        store_video_stats(cur, "UC1", [])
+        cur.executemany.assert_not_called()
 
 
 if __name__ == "__main__":

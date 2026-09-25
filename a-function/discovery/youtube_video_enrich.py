@@ -1,23 +1,41 @@
-"""Recover contacts from a YouTube channel's recent videos, not just its About text.
+"""Recover contacts from a YouTube channel's recent videos, and record their
+per-video stats (views/likes/comments/duration) for scoring.py's fake-audience
+and engagement signals -- not just the channel's About text.
 
 Many creators only paste their email/Zalo/Telegram in a video's description, not
 the channel description. For channels still missing an email, this pulls their
 most recent uploads (default 50), scans those descriptions with the shared
-contact parser, and fills in the entity's still-empty contact columns.
+contact parser, and fills in the entity's still-empty contact columns. Every
+video it fetches also gets its statistics+contentDetails stored into
+staging_youtube_video (db/13_youtube_video_stats.sql) at 0 extra quota --
+videos.list costs the same 1 unit/call no matter how many `part` values are
+requested, so this rides along for free with the contact scan.
 
 Quota: 1 unit per 50 channels (channels.list, to resolve each channel's uploads
 playlist) + 1 unit per channel (playlistItems.list, up to 50 recent video ids)
-+ 1 unit per channel (videos.list, those ids' descriptions) -- ~2 units per
-channel, not the ~101 units/channel a search.list-based "top-viewed" lookup
-costs (search.list also has its own 100-call/day bucket, shared with discovery
--- this enrichment no longer touches it at all). Email/Zalo/phone tend to sit in
-a boilerplate footer repeated on every upload, so scanning the 50 most recent
-videos finds it just as reliably as scanning the 2 most-viewed ones used to.
++ 1 unit per channel (videos.list, those ids' snippet+statistics+contentDetails)
+-- ~2 units per channel, not the ~101 units/channel a search.list-based
+"top-viewed" lookup costs (search.list also has its own 100-call/day bucket,
+shared with discovery -- this enrichment no longer touches it at all).
+Email/Zalo/phone tend to sit in a boilerplate footer repeated on every upload,
+so scanning the 50 most recent videos finds it just as reliably as scanning the
+2 most-viewed ones used to -- and recent videos are also the *right* set for
+fake-audience scoring (a channel's current audience, not one old viral fluke).
 
 This is paid enrichment, so it runs only AFTER the filter gate (discovery.gate,
-E6 6.2): it refuses while any YouTube row is still stage='discovered', picks only
-filtered_in rows, and stamps each scanned channel enriched so it is never paid
-for twice (even when its videos held no email). Gate first:
+E6 6.2): it refuses while any YouTube row is still stage='discovered'. Two
+selection modes:
+
+  - default: channels still missing an email (stage='filtered_in', never
+    scanned before) -- stamps each scanned channel enriched so it is never paid
+    for twice (even when its videos held no email).
+  - --stats: any gated channel (filtered_in/enriched/qualified/outreach) whose
+    video stats are missing or older than 30 days, regardless of email --
+    backfills/refreshes stats for channels the default mode never touches
+    (already has an email). Never regresses stage/last_enriched for a channel
+    past 'filtered_in' (only a forward filtered_in->enriched transition stamps
+    the gate, same as default mode); freshness for the rest is judged purely
+    from staging_youtube_video.collected_at.
 
     python -m discovery.gate --platform youtube gate --market vn
 
@@ -25,6 +43,8 @@ for twice (even when its videos held no email). Gate first:
     python -m discovery.youtube_video_enrich --limit 20 --dry-run
     # enrich the 20 highest-follower YouTube channels that still lack an email:
     python -m discovery.youtube_video_enrich --limit 20
+    # backfill/refresh video stats for scoring, independent of email status:
+    python -m discovery.youtube_video_enrich --stats --limit 50
     # specific channels:
     python -m discovery.youtube_video_enrich --channel-ids UCxxxx UCyyyy
 """
@@ -51,6 +71,9 @@ load_dotenv(Path(__file__).resolve().parents[1] / ".youtube_api_key.env")
 # shortlist.py can drop the row too (see EXCLUDE_TMGM_MENTION below).
 TMGM_RE = re.compile(r"\btmgm\b", re.I)
 
+# --stats mode re-scans a channel only once its stored video stats are this stale.
+VIDEO_STATS_REFRESH_DAYS = 30
+
 
 def uploads_playlist_ids(channel_ids: list[str], api_key: str) -> tuple[dict[str, str], int]:
     """(channel_id -> its "uploads" playlist id, quota_units). 1 unit per 50 ids."""
@@ -67,8 +90,11 @@ def uploads_playlist_ids(channel_ids: list[str], api_key: str) -> tuple[dict[str
     return mapping, quota
 
 
-def recent_video_descriptions(uploads_playlist_id: str, api_key: str, max_videos: int) -> tuple[str, int]:
-    """(combined descriptions of the channel's most recent uploads, quota_units)."""
+def recent_videos(uploads_playlist_id: str, api_key: str, max_videos: int) -> tuple[list[dict], int]:
+    """(the channel's most recent uploads' full video resources -- snippet,
+    statistics, contentDetails -- quota_units). Same 2 calls as a plain
+    description scan; statistics+contentDetails ride along in videos.list's
+    `part` for free (see module docstring)."""
     quota = 0
     playlist_items = request("playlistItems", {
         "part": "contentDetails", "playlistId": uploads_playlist_id,
@@ -78,11 +104,22 @@ def recent_video_descriptions(uploads_playlist_id: str, api_key: str, max_videos
     video_ids = [it.get("contentDetails", {}).get("videoId") for it in playlist_items.get("items", [])
                  if it.get("contentDetails", {}).get("videoId")]
     if not video_ids:
-        return "", quota
-    vids = request("videos", {"part": "snippet", "id": ",".join(video_ids), "key": api_key})
+        return [], quota
+    vids = request("videos", {"part": "snippet,statistics,contentDetails", "id": ",".join(video_ids), "key": api_key})
     quota += 1
-    descs = [(it.get("snippet", {}) or {}).get("description", "") for it in vids.get("items", [])]
-    return "\n".join(d for d in descs if d), quota
+    return vids.get("items", []), quota
+
+
+def store_video_stats(cur, channel_id: str, videos: list[dict]) -> None:
+    """Append this scan's per-video stats to staging_youtube_video (see
+    db/13_youtube_video_stats.sql) for scoring.score_fake_audience/engagement_rate."""
+    from psycopg.types.json import Jsonb
+
+    rows = [(channel_id, v["id"], Jsonb(v)) for v in videos if v.get("id")]
+    if rows:
+        cur.executemany(
+            "INSERT INTO staging_youtube_video (channel_id, video_id, raw) VALUES (%s, %s, %s)", rows,
+        )
 
 
 def main() -> None:
@@ -94,6 +131,9 @@ def main() -> None:
     ap.add_argument("--min-followers", type=int, default=0, help="only channels with at least this many subs")
     ap.add_argument("--channel-ids", nargs="+", default=None,
                     help="explicit channel ids to enrich (overrides the missing-email selection)")
+    ap.add_argument("--stats", action="store_true",
+                    help="target any gated channel with stale/missing video stats, regardless of email "
+                         "(for scoring backfill; default mode only targets channels still missing an email)")
     ap.add_argument("--dry-run", action="store_true", help="select + report quota, but call no API and write nothing")
     args = ap.parse_args()
 
@@ -110,15 +150,34 @@ def main() -> None:
     with conn.cursor() as cur:
         if args.channel_ids:
             cur.execute(
-                "select entity_id, platform_id, email_norm, phone_norm, wechat_norm, contacts "
+                "select entity_id, platform_id, email_norm, phone_norm, wechat_norm, contacts, stage "
                 "from entities where platform='youtube' and platform_id = any(%s)",
                 [args.channel_ids],
+            )
+        elif args.stats:
+            # any gated channel with no/stale video stats, regardless of email -- backfills
+            # scoring data for channels the default (email-focused) mode never touches.
+            cur.execute(
+                """
+                select e.entity_id, e.platform_id, e.email_norm, e.phone_norm, e.wechat_norm, e.contacts, e.stage
+                from entities e
+                where e.platform='youtube' and e.stage in ('filtered_in','enriched','qualified','outreach')
+                  and coalesce(e.follower_count,0) >= %s
+                  and not exists (
+                      select 1 from staging_youtube_video v
+                      where v.channel_id = e.platform_id
+                        and v.collected_at > now() - make_interval(days => %s)
+                  )
+                order by e.follower_count desc nulls last
+                limit %s
+                """,
+                [args.min_followers, VIDEO_STATS_REFRESH_DAYS, args.limit],
             )
         else:
             # highest-follower gated YouTube channels that still have no email
             cur.execute(
                 """
-                select entity_id, platform_id, email_norm, phone_norm, wechat_norm, contacts
+                select entity_id, platform_id, email_norm, phone_norm, wechat_norm, contacts, stage
                 from entities
                 where platform='youtube' and email_norm is null
                   and stage='filtered_in' and last_enriched is null
@@ -145,9 +204,11 @@ def main() -> None:
             return
 
         enriched = emails = phones = 0
-        scanned = []
+        scanned = []          # every channel whose videos were fetched (for the summary line)
+        scanned_for_gate = [] # only originally-'filtered_in' channels -> safe to gate.mark_enriched
+                               # (never downgrade an already enriched/qualified/outreach channel's stage)
         quota_exhausted = False
-        for entity_id, platform_id, email_norm, phone_norm, wechat_norm, contacts in targets:
+        for entity_id, platform_id, email_norm, phone_norm, wechat_norm, contacts, stage in targets:
             if quota_exhausted:
                 break
             playlist_id = uploads_by_channel.get(platform_id)
@@ -155,7 +216,7 @@ def main() -> None:
                 print(f"  {platform_id}: no uploads playlist, skipped")
                 continue
             try:
-                desc, q = recent_video_descriptions(playlist_id, api_key, args.max_videos)
+                videos, q = recent_videos(playlist_id, api_key, args.max_videos)
             except QuotaExceededError:
                 print(f"  quota exhausted after {len(scanned)} channel(s); stopping, keeping progress so far")
                 quota_exhausted = True
@@ -165,6 +226,11 @@ def main() -> None:
                 continue
             quota += q
             scanned.append(entity_id)
+            if stage == "filtered_in":
+                scanned_for_gate.append(entity_id)
+            store_video_stats(cur, platform_id, videos)
+            desc = "\n".join((v.get("snippet", {}) or {}).get("description", "") for v in videos
+                              if (v.get("snippet", {}) or {}).get("description"))
             if not desc:
                 continue
             entity = {"bio_text": desc, "email_norm": email_norm,
@@ -192,9 +258,16 @@ def main() -> None:
                 (new_email, new_phone, new_wechat, Jsonb(merged) if merged else None, platform_id),
             )
         conn.commit()
-    gate.mark_enriched(conn, scanned)  # paid for once -> never re-selected
+    gate.mark_enriched(conn, scanned_for_gate)  # paid for once -> never re-selected
+
+    rescored = 0
+    if scanned:  # freshly stored video stats change fake_audience_signal/engagement_rate -- rescore now,
+        from db.run_scoring import score_entities  # not just on the channel's next unrelated ingest
+
+        rescored = score_entities(conn, scanned)
     conn.close()
-    print(f"enriched {enriched} channels: +{emails} emails, +{phones} phones  |  quota used: {quota} units"
+    print(f"scanned {len(scanned)} channels (video stats stored, {rescored} rescored), enriched {enriched}: "
+          f"+{emails} emails, +{phones} phones  |  quota used: {quota} units"
           + ("  (stopped early: quota exhausted)" if quota_exhausted else ""))
 
 

@@ -69,6 +69,49 @@ class ContactsTests(unittest.TestCase):
     def test_qq_with_kou_label(self):
         self.assertEqual(extract_contacts("扣扣：123456789")["qq"], "123456789")
 
+    # --- obfuscated / styled contact recovery ---
+
+    def test_email_at_dot_parenthesised(self):
+        self.assertEqual(extract_contacts("lien he info (at) gmail (dot) com")["email"], "info@gmail.com")
+
+    def test_email_bracketed_and_spaced(self):
+        self.assertEqual(extract_contacts("info[at]gmail[dot]com")["email"], "info@gmail.com")
+        self.assertEqual(extract_contacts("mail: info @ gmail . com")["email"], "info@gmail.com")
+
+    def test_email_symbol_at_word_dot(self):
+        self.assertEqual(extract_contacts("info@gmail dot com")["email"], "info@gmail.com")
+
+    def test_email_styled_unicode_font(self):
+        # 𝗂𝗇𝖿𝗈@𝗀𝗆𝖺𝗂𝗅.com in a fancy Instagram/TikTok font
+        styled = "\U0001d422\U0001d427\U0001d41f\U0001d428@\U0001d420\U0001d426\U0001d41a\U0001d422\U0001d425.com"
+        self.assertEqual(extract_contacts(styled)["email"], "info@gmail.com")
+
+    def test_email_deobfuscation_no_false_positive_from_prose(self):
+        # a bare " at " must NOT be read as "@" -> this is not an email
+        self.assertEqual(extract_contacts("Let's meet at home dot org tomorrow")["email"], "")
+
+    def test_phone_parenthesised_country_code(self):
+        self.assertEqual(extract_contacts("Hotline (+84) 912 345 678")["phone"].replace(" ", ""), "(+84)912345678".replace(" ", ""))
+
+    def test_phone_bare_84_prefix(self):
+        self.assertTrue(extract_contacts("Zalo 84912345678")["phone"].endswith("84912345678"))
+
+    def test_phone_letter_o_for_zero(self):
+        self.assertEqual(extract_contacts("lien he O912345678")["phone"], "0912345678")
+
+    def test_wechat_v_colon_label(self):
+        self.assertEqual(extract_contacts("add V: gold_traders88")["wechat"], "gold_traders88")
+
+    def test_wechat_v_colon_not_triggered_by_tv(self):
+        # "TV:" must not be read as a WeChat "V:" label
+        self.assertEqual(extract_contacts("watch on TV: someshow")["wechat"], "")
+
+    def test_wechat_no_false_positive_from_generic_emoji(self):
+        # 📱/📲/💬 emoji are followed by ordinary words in real bios -> NOT a WeChat id
+        self.assertEqual(extract_contacts("\U0001F4F1 Tecnologia en todas partes")["wechat"], "")
+        self.assertEqual(extract_contacts("\U0001F4F2 Telegram: @somechannel")["wechat"], "")
+        self.assertEqual(extract_contacts("\U0001F4AC WhatsApp business")["wechat"], "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from discovery import serp
 
@@ -85,7 +86,8 @@ class FakeActor:
 
     def call(self, run_input):
         self.run_input = run_input
-        return {"id": "run123", "defaultDatasetId": "ds1"}
+        # apify-client 3.x returns a Run model (attribute access), not a dict
+        return SimpleNamespace(id="run123", default_dataset_id="ds1")
 
 
 class FakeClient:

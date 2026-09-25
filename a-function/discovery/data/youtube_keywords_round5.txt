@@ -1,0 +1,51 @@
+# Round 5 (2026-09-24): compiled from lines already sitting in youtube_keywords_au.txt,
+# vn2_adjacent.txt, vn3_adjacent.txt, vn4.txt, vn_adjacent.txt that were NEVER actually
+# searched (checked against staging_youtube.raw->discovery_keywords, 124 terms). Junk
+# lines dropped (movie-title noise "làm giàu với ma...", English SMC/ICT and crypto-futures
+# terms with no VN signal, "...tiếng anh là gì" translation queries).
+
+# --- AU broker/suburb (from youtube_keywords_au.txt) ---
+giao dịch vàng xauusd úc
+pepperstone việt nam
+eightcap việt nam
+blackbull markets việt
+forex cabramatta
+trader footscray
+forex springvale
+người việt st albans đầu tư
+
+# --- real estate / adjacent wealth-building (from vn2_adjacent.txt) ---
+làm giàu
+đầu tư bất động sản
+đầu tư bất động sản dubai
+đầu tư bất động sản online
+đầu tư bất động sản là gì
+đầu tư bất động sản dòng tiền
+đầu tư bất động sản đà nẵng
+đầu tư bất động sản cho thuê
+đầu tư bất động sản hiệu quả
+
+# --- trading psychology (from vn3_adjacent.txt) ---
+tâm lý giao dịch
+tâm lý giao dịch sách
+
+# --- forex/crypto, more overseas-VN geography (from vn4.txt) ---
+đầu tư crypto người việt hải ngoại
+sàn giao dịch forex quốc tế
+forex signal vip việt nam
+review sàn giao dịch forex 2026
+hướng dẫn đầu tư forex cho người mới
+forex trader việt nam thành công
+đầu tư ngoại hối cho người mới bắt đầu
+cộng đồng trader việt nam
+người việt ở séc đầu tư
+người việt ở ba lan đầu tư
+trader việt ở đài loan
+việt kiều đầu tư crypto
+sàn forex quốc tế uy tín
+kiếm tiền từ trading
+
+# --- broker/gold (from vn_adjacent.txt) ---
+sàn forex xtb
+sàn forex xnet
+giờ giao dịch vàng egold

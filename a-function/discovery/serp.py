@@ -88,14 +88,14 @@ def discover(queries: list[str], *, max_pages: int = 1, results_per_page: int = 
         "resultsPerPage": results_per_page,
         "mobileResults": False,
     })
-    items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+    items = list(client.dataset(run.default_dataset_id).iterate_items())
     rows = parse_items(items)
     return {
         "collected_at": datetime.now(timezone.utc).isoformat(),
         "queries": queries,
         "items": rows,
         "count": len(rows),
-        "run_id": run.get("id"),
+        "run_id": run.id,
     }
 
 

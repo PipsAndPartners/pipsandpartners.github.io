@@ -1,15 +1,21 @@
-"""Computes IB/creator scores for every entity in the DB and upserts entity_scores.
+"""Computes IB/creator scores and upserts entity_scores.
 
 Usage:
-    python db/run_scoring.py
+    python db/run_scoring.py                # every entity
+    python db/run_scoring.py --entity-ids 1 2 3
+
+score_entities() is also called automatically after every ingest
+(db/loader.py:load_platform_results), so entity_scores stays current without
+a separate manual step -- this CLI is for a full backfill/re-score.
 """
 
+import argparse
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from psycopg import sql
+from psycopg import Connection, sql
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
@@ -75,21 +81,38 @@ def _post_engagement(cur, platform: str, platform_id: str) -> list[dict]:
     return posts
 
 
-def main() -> None:
-    conn = get_conn()
-    conn.row_factory = dict_row
+def _video_stats(cur, platform: str, platform_id: str) -> list[dict]:
+    """Latest-known stats per video (see db/13_youtube_video_stats.sql), for
+    scoring.score_fake_audience's per-video path. YouTube only for now."""
+    if platform != "youtube":
+        return []
+    cur.execute(
+        "SELECT DISTINCT ON (video_id) raw FROM staging_youtube_video "
+        "WHERE channel_id = %s ORDER BY video_id, collected_at DESC",
+        (platform_id,),
+    )
+    return [row["raw"] for row in cur.fetchall()]
 
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM entities")
+
+def score_entities(conn: Connection, entity_ids: list[int] | None = None) -> int:
+    """Score `entity_ids` (or every entity when None) and upsert entity_scores.
+    Commits its own transaction; safe to call mid-ingest (db/loader.py) or as a
+    standalone backfill (this module's CLI)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        if entity_ids:
+            cur.execute("SELECT * FROM entities WHERE entity_id = ANY(%s)", (list(entity_ids),))
+        else:
+            cur.execute("SELECT * FROM entities")
         entities = cur.fetchall()
 
     scored = 0
-    with conn.cursor() as cur:
+    with conn.cursor(row_factory=dict_row) as cur:
         for entity in entities:
             raw = _latest_raw(cur, entity["platform"], entity["platform_id"])
             history = _follower_history(cur, entity["entity_id"])
             posts = _post_engagement(cur, entity["platform"], entity["platform_id"])
-            result = score_entity(entity, raw, history, posts)
+            videos = _video_stats(cur, entity["platform"], entity["platform_id"])
+            result = score_entity(entity, raw, history, posts, videos)
             cur.execute(
                 UPSERT,
                 (
@@ -108,8 +131,19 @@ def main() -> None:
                 ),
             )
             scored += 1
+    conn.commit()  # explicit: a bare SELECT earlier on this connection (very likely --
+                   # callers share `conn` with other steps) turns conn.transaction()'s
+                   # would-be auto-commit into a no-op savepoint, so commit for real here.
+    return scored
 
-    conn.commit()
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--entity-ids", type=int, nargs="+", default=None, help="score only these entities")
+    args = ap.parse_args()
+
+    conn = get_conn()
+    scored = score_entities(conn, args.entity_ids)
     conn.close()
     print(f"Scored {scored} entities.")
 

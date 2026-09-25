@@ -1,0 +1,38 @@
+# Adjacent-niche keywords for Vietnamese-in-Australia creators near the forex
+# audience (crypto, stocks, personal finance, MMO, business, property, migration-
+# investment). Wider net -- "close enough is fine". Run as a SEPARATE --keywords-
+# file so the strict-forex list isn't re-searched (search.list can't be skipped).
+
+# crypto / coin
+crypto người việt úc
+đầu tư coin người việt úc
+bitcoin việt nam úc
+
+# stocks / US equities
+chứng khoán mỹ người việt úc
+đầu tư chứng khoán úc người việt
+
+# personal finance / wealth / freedom
+tài chính cá nhân người việt úc
+tự do tài chính người việt úc
+làm giàu người việt tại úc
+quản lý tài chính việt úc
+
+# make money online / MMO
+kiếm tiền online người việt úc
+mmo người việt úc
+
+# business / startup
+kinh doanh người việt tại úc
+khởi nghiệp người việt úc
+
+# property (audience overlap, cross-sell)
+đầu tư bất động sản úc người việt
+
+# migration-investment / super / insurance
+định cư đầu tư úc
+bảo hiểm hưu trí super người việt úc
+
+# broad money creators in AU
+kiếm tiền người việt ở úc
+cuộc sống tài chính người việt úc

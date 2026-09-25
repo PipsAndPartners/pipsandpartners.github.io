@@ -1,4 +1,11 @@
-"""Bounded public Telegram member scan followed by Instagram profile enrichment."""
+"""Bounded public Telegram member scan followed by Instagram profile enrichment.
+
+The Instagram profile scrape is the paid step (Apify instagram-profile-scraper),
+so it runs behind the cheap filter gate (discovery.gate, E6 6.2/6.7): only
+members whose Telegram bio carries a forex/IB signal are worth paying to enrich.
+`_gate_candidates` applies that gate before `enrich_instagram` is ever called, so
+irrelevant members structurally cannot cost enrichment credit.
+"""
 
 import argparse
 import asyncio
@@ -13,6 +20,7 @@ from apify_client import ApifyClient
 from dotenv import load_dotenv
 from telethon.tl.functions.users import GetFullUserRequest
 
+from discovery import gate
 from discovery.keyword_campaign import instagram_username
 from discovery.telegram.client import Settings, build_client
 
@@ -76,6 +84,34 @@ async def scan_group(client, candidate: dict, limit: int) -> dict:
     return result
 
 
+def _gate_candidates(groups: list[dict], *, min_relevance: int) -> tuple[list[str], list[str]]:
+    """Cheap gate BEFORE the paid Instagram enrichment (E6 6.2/6.7).
+
+    Returns (kept, all): `all` is every Instagram username harvested from member
+    bios; `kept` is only those whose source member's bio passes the forex/IB
+    relevance gate. Follower count is unknown until enrichment runs, so relevance
+    alone decides (discovery.gate.passes_filter handles the missing-follower
+    case). A username is kept if ANY member it came from passes -- one relevant
+    source is enough to justify paying for that profile.
+    """
+    kept: set[str] = set()
+    all_usernames: set[str] = set()
+    for group in groups:
+        for member in group["members"]:
+            handles = member.get("instagram_usernames") or []
+            if not handles:
+                continue
+            all_usernames.update(handles)
+            entity = {
+                "display_name": member.get("display_name"),
+                "bio_text": member.get("about"),
+                "handle": member.get("username"),
+            }
+            if gate.passes_filter(entity, min_relevance=min_relevance):
+                kept.update(handles)
+    return sorted(kept), sorted(all_usernames)
+
+
 def enrich_instagram(usernames: list[str]) -> tuple[list[dict], str | None]:
     if not usernames:
         return [], None
@@ -87,13 +123,13 @@ def enrich_instagram(usernames: list[str]) -> tuple[list[dict], str | None]:
         run = client.actor("apify/instagram-profile-scraper").call(
             run_input={"usernames": usernames}
         )
-        items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+        items = list(client.dataset(run.default_dataset_id).iterate_items())
         return items, None
     except Exception as error:
         return [], f"{type(error).__name__}: {error}"
 
 
-async def run(input_path: Path, member_limit: int) -> dict:
+async def run(input_path: Path, member_limit: int, min_relevance: int = gate.DEFAULT_MIN_RELEVANCE) -> dict:
     started = time.perf_counter()
     campaign = json.loads(input_path.read_text(encoding="utf-8"))
     candidates = campaign.get("telegram") or campaign.get("results") or []
@@ -129,7 +165,9 @@ async def run(input_path: Path, member_limit: int) -> dict:
     for group in groups:
         unique_members.extend(group["members"])
     unique_members = unique_members[:member_limit]
-    usernames = sorted({name for group in groups for name in group["instagram_usernames"]})
+    # Cheap gate BEFORE the paid Instagram scrape: only enrich usernames whose
+    # source member's bio shows a forex/IB signal (E6 6.2/6.7).
+    usernames, all_candidates = _gate_candidates(groups, min_relevance=min_relevance)
     instagram, instagram_error = await asyncio.to_thread(enrich_instagram, usernames)
     return {
         "collected_at": datetime.now(timezone.utc).isoformat(),
@@ -138,6 +176,12 @@ async def run(input_path: Path, member_limit: int) -> dict:
         "groups": groups,
         "instagram_usernames": usernames,
         "instagram": instagram,
+        "gate": {
+            "min_relevance": min_relevance,
+            "candidates_before_gate": len(all_candidates),
+            "candidates_after_gate": len(usernames),
+            "dropped_by_gate": len(all_candidates) - len(usernames),
+        },
         "errors": {"instagram": instagram_error} if instagram_error else {},
         "deduplication": {
             "key": "telegram_user_id",
@@ -162,9 +206,11 @@ def main() -> None:
     parser.add_argument("--input", type=Path, default=Path("results/telegram_keyword_demo.json"))
     parser.add_argument("--member-limit", type=int, default=10,
                         help="Maximum total public members across selected groups")
+    parser.add_argument("--min-relevance", type=int, default=gate.DEFAULT_MIN_RELEVANCE,
+                        help="Cheap gate: min forex/IB relevance a member's bio needs before we pay to enrich its Instagram")
     parser.add_argument("--output", type=Path, default=Path("results/member_instagram_enrich.json"))
     args = parser.parse_args()
-    result = asyncio.run(run(args.input, args.member_limit))
+    result = asyncio.run(run(args.input, args.member_limit, args.min_relevance))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(result["counts"], ensure_ascii=False))

@@ -1,6 +1,7 @@
 """Starts an Apify actor run and polls it live until it finishes."""
 
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
 from apify_client import ApifyClient
@@ -48,3 +49,41 @@ def run_actor_live(
     items = list(dataset_client.iterate_items())
     print(f"[{platform_name}] finished - {len(items)} items")
     return items
+
+
+def run_actor_parallel(
+    jobs: list[dict],
+    poll_seconds: float = 5.0,
+    tokens: list[str] | None = None,
+) -> list[dict]:
+    """Run several actor jobs at once, spread across all Apify tokens.
+
+    Each job is a dict: {"platform", "actor_id", "run_input"} (optionally "token"
+    to pin a specific one). Jobs are handed out round-robin across the token pool,
+    with at most one concurrent run per token, so four free accounts do four runs
+    in the time one account would do one -- while each stays within its own limits.
+
+    Returns a list aligned with `jobs`: {"platform", "items"} on success or
+    {"platform", "error"} on failure (one bad job never sinks the others).
+    """
+    from apify_config import TokenPool  # local import: avoid import cycle
+
+    toks = TokenPool(tokens).tokens
+    results: list[dict] = [{} for _ in jobs]
+
+    def _one(idx: int, job: dict) -> tuple[int, dict]:
+        token = job.get("token") or toks[idx % len(toks)]
+        try:
+            items = run_actor_live(
+                ApifyClient(token), job["platform"], job["actor_id"], job["run_input"], poll_seconds
+            )
+            return idx, {"platform": job["platform"], "items": items}
+        except Exception as exc:  # noqa: BLE001 - report per-job, keep the rest
+            return idx, {"platform": job["platform"], "error": repr(exc)}
+
+    with ThreadPoolExecutor(max_workers=len(toks)) as pool:
+        futures = [pool.submit(_one, i, job) for i, job in enumerate(jobs)]
+        for future in as_completed(futures):
+            idx, res = future.result()
+            results[idx] = res
+    return results

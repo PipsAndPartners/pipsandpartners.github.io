@@ -1,0 +1,39 @@
+# YouTube search keywords targeting Vietnamese forex/trading KOLs living in
+# Australia. Read by discovery/youtube_data_api.py --keywords-file (one term per
+# line, lines starting with # are comments). Each term is one search.list call
+# (100 quota units), so keep the list tight.
+#
+# Three families of terms, chosen because Vietnamese-in-Australia creators rarely
+# write "Australia" in their channel bio:
+#   1. explicit VN x AU geography
+#   2. ASIC/Australian brokers Vietnamese IBs promote (strong "lives in AU" proxy)
+#   3. Vietnamese-community suburbs in Sydney/Melbourne
+
+# --- 1. explicit VN x AU geography ---
+forex việt nam úc
+trader việt tại úc
+trader việt sydney
+trader việt melbourne
+đầu tư forex người việt úc
+người việt đầu tư tài chính úc
+vietnamese forex trader australia
+vietnamese trading australia
+giao dịch vàng xauusd úc
+đầu tư chứng khoán úc người việt
+
+# --- 2. ASIC / Australian brokers (proxy for living in AU) ---
+tmgm việt nam
+pepperstone việt nam
+ic markets việt nam
+vantage markets việt
+eightcap việt nam
+blackbull markets việt
+go markets việt nam
+fp markets việt nam
+
+# --- 3. Vietnamese-community suburbs ---
+forex cabramatta
+đầu tư bankstown
+trader footscray
+forex springvale
+người việt st albans đầu tư

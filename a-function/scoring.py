@@ -1,14 +1,19 @@
 """IB / creator scoring across the 8 requested signals.
 
 Several dimensions need data this project hasn't collected yet: post-level
-engagement, audience demographics, follower-count history, and bot/fake-
-follower analysis. Those come back as None with a note explaining what's
+engagement, audience demographics, follower-count history, and (outside
+YouTube) fake-follower analysis. Those come back as None with a note explaining what's
 missing, rather than a fabricated number. The rest use best-effort heuristics
 from whatever the current entity/raw data actually contains -- each is
 labeled with exactly how confident (or not) it is.
 """
 
 from __future__ import annotations
+
+import math
+import re
+from datetime import datetime, timezone
+from statistics import median
 
 # forex/IB-affiliate niche keywords -> weight, matched against bio/headline/handle.
 RELEVANCE_KEYWORDS = {
@@ -59,7 +64,6 @@ BRAND_RISK_PHRASES = [
 
 NOT_COMPUTABLE_NOTES = {
     "audience_demographics": "requires a dedicated audience-analytics actor (e.g. HypeAuditor-style), not integrated yet",
-    "fake_audience_signal": "requires follower-graph bot analysis, not collected",
 }
 
 SCORE_WEIGHTS = {
@@ -120,6 +124,159 @@ def score_audience_quality(follower_count: int | None, raw: dict) -> dict:
     }
 
 
+# Shorts and very-fresh uploads have different/unsettled view-like-comment
+# patterns than a channel's normal long-form output, so both score_fake_audience
+# and _engagement_posts_from_videos exclude them via _usable_videos().
+SHORTS_MAX_SECONDS = 60
+MIN_VIDEO_AGE_DAYS = 7
+
+_ISO8601_DURATION_RE = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$")
+
+
+def _duration_seconds(iso_duration: str | None) -> int | None:
+    """contentDetails.duration ("PT4M13S") -> seconds, or None if unparseable."""
+    if not iso_duration:
+        return None
+    m = _ISO8601_DURATION_RE.match(iso_duration)
+    if not m:
+        return None
+    hours, minutes, seconds = (int(g) if g else 0 for g in m.groups())
+    return hours * 3600 + minutes * 60 + seconds
+
+
+def _usable_videos(videos: list[dict], now: datetime) -> list[dict]:
+    """videos old enough for their view count to have settled and long enough to
+    not be a Short (see module-level constants above)."""
+    usable = []
+    for v in videos or []:
+        snippet = v.get("snippet") or {}
+        published = snippet.get("publishedAt")
+        if not published:
+            continue
+        try:
+            published_at = datetime.fromisoformat(published.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if (now - published_at).days < MIN_VIDEO_AGE_DAYS:
+            continue
+        duration = _duration_seconds((v.get("contentDetails") or {}).get("duration"))
+        if duration is not None and duration <= SHORTS_MAX_SECONDS:
+            continue
+        usable.append(v)
+    return usable
+
+
+def _ratio_to_risk(ratio: float) -> int:
+    # log scale: >=10% of subs -> 0 risk, <=1% -> 100 risk.
+    return 100 if ratio <= 0 else max(0, min(100, round((1 - math.log10(ratio / 0.01)) * 100)))
+
+
+def _risk_verdict(risk: int) -> str:
+    return "likely bought/inactive subs" if risk >= 70 else "suspicious" if risk >= 40 else "looks organic"
+
+
+def _fake_audience_from_channel_totals(stats: dict, subs: int) -> dict:
+    """Fallback when no per-video stats have been collected yet (see
+    discovery/youtube_video_enrich.py): lifetime views/videos from the
+    channels.list `statistics` block already in staging_youtube.raw, no extra quota.
+    Real subscribers watch: a channel's average video normally reaches a sizeable
+    share of its subs (median ~25% across our DB, p5 ~2%). Bought subs never watch,
+    so lifetime views per video collapse relative to the subscriber count.
+    """
+    views, video_count = int(stats.get("viewCount") or 0), int(stats.get("videoCount") or 0)
+    if video_count < 3:
+        return {"score": None, "note": f"too little to judge ({subs} subs, {video_count} videos, no per-video stats collected yet)"}
+    ratio = views / video_count / subs
+    risk = _ratio_to_risk(ratio)
+    flags = [f"avg views/video = {ratio:.1%} of subs (channel lifetime totals, no per-video stats collected yet)"]
+    if views < subs:  # lifetime views below subscriber count -- almost never organic
+        risk = max(risk, 90)
+        flags.append(f"lifetime views ({views}) < subs ({subs})")
+    return {"score": risk, "note": f"{_risk_verdict(risk)}: " + "; ".join(flags)}
+
+
+def _fake_audience_from_videos(usable: list[dict], subs: int) -> dict:
+    """Per-video signals from `usable` (see _usable_videos), each 0-100 risk on
+    its own; the channel's score is the WORST of whichever are computable (a
+    creator can hide like counts or disable comments without that alone being
+    suspicious, so only the signals with enough data count). A weighted
+    average would let a great view/sub ratio paper over near-zero likes --
+    bought views and bought subs looking "organic" by that one measure is
+    exactly the case a single bad signal needs to catch.
+    """
+    stats_list = [(v.get("statistics") or {}) for v in usable]
+    view_counts = [int(s.get("viewCount") or 0) for s in stats_list]
+
+    view_ratio = median(v / subs for v in view_counts)
+    risks = {"view": _ratio_to_risk(view_ratio)}
+    flags = [f"median views/video = {view_ratio:.1%} of subs across {len(usable)} recent long-form video(s)"]
+
+    like_ratios = [int(s["likeCount"]) / vc for s, vc in zip(stats_list, view_counts)
+                   if "likeCount" in s and vc > 0]
+    if len(like_ratios) >= 3:
+        like_ratio = median(like_ratios)
+        # organic long-form finance/trading content usually lands ~0.5%-30% likes/view;
+        # far below suggests bought/inactive views, far above suggests bought likes.
+        risks["like"] = 100 if like_ratio < 0.005 else 80 if like_ratio > 0.30 else 0
+        flags.append(f"median likes/view = {like_ratio:.1%}")
+
+    comment_ratios = [int(s["commentCount"]) / int(s["likeCount"]) for s in stats_list
+                       if s.get("commentCount") is not None and int(s.get("likeCount") or 0) > 0]
+    if len(comment_ratios) >= 3:
+        comment_ratio = median(comment_ratios)
+        risks["comment"] = 60 if comment_ratio < 0.01 else 0  # near-zero comments on real likes -- bought likes
+        flags.append(f"median comments/like = {comment_ratio:.1%}")
+
+    worst_signal, risk = max(risks.items(), key=lambda kv: kv[1])
+    flags.append(f"worst signal: {worst_signal}")
+
+    med_view = median(view_counts)
+    if len(view_counts) >= 5 and med_view > 0 and max(view_counts) > 15 * med_view:
+        # one bought/viral video can mask an otherwise-dead channel -- a soft bump,
+        # since a genuine viral hit looks the same and shouldn't alone fail a channel.
+        risk = min(100, risk + 15)
+        flags.append(f"one video ({max(view_counts)} views) is a {max(view_counts) / med_view:.0f}x outlier vs the median")
+
+    return {"score": risk, "note": f"{_risk_verdict(risk)}: " + "; ".join(flags)}
+
+
+def score_fake_audience(raw: dict, videos: list[dict] | None = None, now: datetime | None = None) -> dict:
+    """0-100 risk that a YouTube channel's subscribers/views/likes are bought or
+    inactive (higher = worse). Prefers per-video stats (`videos`, from
+    staging_youtube_video via discovery/youtube_video_enrich.py -- 0 extra API
+    quota, see its docstring) when at least 3 recent long-form videos are
+    available; falls back to the channel's lifetime totals otherwise. Other
+    platforms don't expose either, so they get None.
+    """
+    stats = (raw or {}).get("statistics") or {}
+    if not stats.get("subscriberCount"):
+        return {"score": None, "note": "needs YouTube channel statistics (subs/views/videos); not available for this platform/entity"}
+    if stats.get("hiddenSubscriberCount"):
+        return {"score": None, "note": "subscriber count hidden by the channel"}
+    subs = int(stats["subscriberCount"])
+    if subs <= 0:
+        return {"score": None, "note": "0 subscribers, nothing to compare against"}
+
+    usable = _usable_videos(videos or [], now or datetime.now(timezone.utc))
+    if len(usable) >= 3:
+        return _fake_audience_from_videos(usable, subs)
+    return _fake_audience_from_channel_totals(stats, subs)
+
+
+def _engagement_posts_from_videos(videos: list[dict], now: datetime | None = None) -> list[dict]:
+    """{"likes","comments","shares"} rows for score_engagement_rate(), from the
+    same recent-long-form-video set score_fake_audience uses. YouTube's API
+    exposes no share count, so shares is always 0 here."""
+    usable = _usable_videos(videos, now or datetime.now(timezone.utc))
+    posts = []
+    for v in usable:
+        s = v.get("statistics") or {}
+        if "likeCount" not in s:
+            continue
+        posts.append({"likes": int(s["likeCount"]), "comments": int(s.get("commentCount") or 0), "shares": 0})
+    return posts
+
+
 def score_follower_growth(history: list[dict]) -> dict:
     """history: rows of {"follower_count": int, "captured_at": datetime}, ascending by time."""
     if len(history) < 2:
@@ -146,7 +303,7 @@ def score_engagement_rate(posts: list[dict], follower_count: int | None) -> dict
         return {
             "value": None,
             "score": None,
-            "note": "no post-level data available for this platform/entity (only TikTok and Twitter fetch posts today)",
+            "note": "no post-level data available for this platform/entity (only TikTok, Twitter and YouTube fetch posts today)",
         }
     if not follower_count:
         return {"value": None, "score": None, "note": "have post data but no follower count to divide by"}
@@ -180,10 +337,15 @@ def score_entity(
     raw: dict,
     follower_history: list[dict] | None = None,
     posts: list[dict] | None = None,
+    videos: list[dict] | None = None,
 ) -> dict:
     """entity: a row from the `entities` table (dict). raw: its latest staging JSON (dict, may be empty).
     follower_history: ascending {"follower_count", "captured_at"} rows for this entity, if any.
     posts: {"likes","comments","shares"} dicts from extract_engagement() over this entity's staged posts.
+    videos: recent YouTube video resources (snippet+statistics+contentDetails) from
+    staging_youtube_video, if any -- feeds fake_audience_signal, and engagement_rate
+    when `posts` is empty (YouTube has no extract_engagement of its own; posts here
+    are derived from the same videos).
     """
     bio_corpus = " ".join(
         filter(None, [entity.get("display_name"), entity.get("bio_text"), entity.get("handle")])
@@ -194,7 +356,10 @@ def score_entity(
     brand_safety = score_brand_safety(bio_corpus)
     audience_quality = score_audience_quality(follower_count, raw or {})
     growth = score_follower_growth(follower_history or [])
+    if not posts and videos:
+        posts = _engagement_posts_from_videos(videos)
     engagement = score_engagement_rate(posts or [], follower_count)
+    fake = score_fake_audience(raw or {}, videos)
     post_price = score_estimated_post_price(follower_count, engagement["value"])
 
     # follower_growth is a % change (unbounded, can be negative or huge), but the
@@ -209,7 +374,8 @@ def score_entity(
         "follower_growth": growth_score,
         "engagement_rate": engagement["score"],
         "audience_demographics": None,
-        "fake_audience_signal": None,
+        # risk score (higher = worse) -> invert so the composite stays "higher = better"
+        "fake_audience_signal": None if fake["score"] is None else 100 - fake["score"],
     }
 
     available = {k: v for k, v in sub_scores.items() if v is not None}
@@ -227,7 +393,7 @@ def score_entity(
         "follower_growth": growth["note"],
         "engagement_rate": engagement["note"],
         "audience_demographics": NOT_COMPUTABLE_NOTES["audience_demographics"],
-        "fake_audience_signal": NOT_COMPUTABLE_NOTES["fake_audience_signal"],
+        "fake_audience_signal": fake["note"],
     }
 
     return {
@@ -237,7 +403,7 @@ def score_entity(
         "follower_growth": growth["value"],
         "brand_safety": brand_safety["score"],
         "estimated_post_price_usd": post_price["value_usd"],
-        "fake_audience_signal": None,
+        "fake_audience_signal": fake["score"],
         "creator_relevance": relevance["score"],
         "composite_score": composite,
         "data_completeness": round(len(available) / len(sub_scores), 2),

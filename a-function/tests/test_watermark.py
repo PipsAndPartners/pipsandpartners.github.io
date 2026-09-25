@@ -68,3 +68,36 @@ class SummarizeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QueryWatermarkTests(unittest.TestCase):
+    def test_rule(self):
+        from datetime import timedelta
+
+        from discovery.common.watermark import query_is_fresh
+
+        days = lambda n: timedelta(days=n)
+        self.assertTrue(query_is_fresh(days(2), 50, 10))     # ran this week
+        self.assertFalse(query_is_fresh(days(7), 50, 10))    # weekly refresh re-runs a productive query
+        self.assertTrue(query_is_fresh(days(7), 50, 0))      # saturated: nothing new last time
+        self.assertFalse(query_is_fresh(days(29), 50, 0))    # ...until the saturation window ends
+        self.assertFalse(query_is_fresh(days(7), 0, 0))      # returned nothing at all -> not "saturated"
+
+    def test_attribute_ids_per_query_or_run_level(self):
+        from discovery.common.watermark import attribute_ids
+        from platforms import douyin, tiktok
+
+        tt = [{"searchQuery": "a", "authorMeta": {"id": "1", "name": "x"}},
+              {"searchQuery": "b", "authorMeta": {"id": "2", "name": "y"}},
+              {"error": "NOT_FOUND", "input": "a"}]
+        self.assertEqual(attribute_ids(tiktok, ["a", "b"], tt), {"a": {"1"}, "b": {"2"}})
+        dy = [{"authorMeta": {"secUid": "s1"}}, {"authorMeta": {"secUid": "s2"}}]  # no query echoed
+        self.assertEqual(attribute_ids(douyin, ["k1", "k2"], dy), {"k1": {"s1", "s2"}, "k2": {"s1", "s2"}})
+
+    def test_run_queries_and_with_queries(self):
+        from discovery.common.watermark import run_queries, with_queries
+
+        self.assertEqual(run_queries("linkedin", {"searchQuery": "ib"}), ["ib"])
+        self.assertEqual(run_queries("instagram", {"usernames": ["a"]}), [])  # lookups aren't searches
+        self.assertEqual(with_queries("tiktok", {"searchQueries": ["a", "b"], "x": 1}, ["b"]),
+                         {"searchQueries": ["b"], "x": 1})

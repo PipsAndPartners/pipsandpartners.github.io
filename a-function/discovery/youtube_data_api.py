@@ -97,7 +97,7 @@ def request(endpoint: str, params: dict) -> dict:
 
 def discover(keywords: list[str], max_results: int = 25,
              region_code: str | None = None, relevance_language: str | None = None,
-             skip_ids: set[str] | None = None) -> dict:
+             skip_ids: set[str] | None = None, search_type: str = "channel") -> dict:
     api_key = os.getenv("YOUTUBE_API_KEY")
     if not api_key:
         raise RuntimeError("Missing YOUTUBE_API_KEY")
@@ -113,7 +113,7 @@ def discover(keywords: list[str], max_results: int = 25,
             continue
         params = {
             "part": "snippet",
-            "type": "channel",
+            "type": search_type,
             "q": keyword,
             "maxResults": min(max_results, 50),
             "key": api_key,
@@ -139,7 +139,8 @@ def discover(keywords: list[str], max_results: int = 25,
         if i < len(keywords) - 1:
             time.sleep(0.5)  # back-to-back search.list calls trip Google's short-window rate limit (429)
         for item in result.get("items", []):
-            channel_id = item.get("id", {}).get("channelId")
+            # type=video results carry the uploader in snippet.channelId, not id
+            channel_id = item.get("id", {}).get("channelId") or item.get("snippet", {}).get("channelId")
             if channel_id:
                 channels.setdefault(channel_id, {"id": channel_id, "keywords": []})
                 if keyword not in channels[channel_id]["keywords"]:
@@ -266,6 +267,9 @@ def main() -> None:
                         help="search at most this many keywords this run (search.list has its own "
                              "100-call/day bucket, shared with the web console's ad hoc searches); "
                              "leftover keywords are printed so you can pick them up on a later run")
+    parser.add_argument("--search-type", choices=("channel", "video"), default="channel",
+                        help="'video' finds the uploaders of matching videos -- surfaces smaller "
+                             "creators whose channel name doesn't contain the keyword")
     parser.add_argument("--output", type=Path, default=Path("results/youtube_data_api.json"))
     parser.add_argument("--no-db", action="store_true")
     parser.add_argument("--overseas-vietnamese", action="store_true")
@@ -316,7 +320,7 @@ def main() -> None:
     region_code = None if (args.overseas_vietnamese or args.au) else args.region_code
     result = discover(keywords, args.max_results,
                       region_code=region_code or None, relevance_language=args.relevance_language or None,
-                      skip_ids=skip_ids)
+                      skip_ids=skip_ids, search_type=args.search_type)
     if args.au:
         result["items"] = filter_vietnamese_au(result["items"])
         result["filter"] = "Vietnamese + finance + Australia"

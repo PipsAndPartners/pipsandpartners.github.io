@@ -127,7 +127,7 @@ def search_instagram(keywords: list[str], limit: int) -> list[dict]:
         }
     )
     found: dict[str, dict] = {}
-    for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+    for item in client.dataset(run.default_dataset_id).iterate_items():
         for row in _iter_search_rows(item):
             url = row.get("url") or row.get("link")
             username = instagram_username(url or "")

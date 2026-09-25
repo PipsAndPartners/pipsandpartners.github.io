@@ -1,0 +1,57 @@
+# Domains a creator's bio commonly links to that are NOT their own site: other
+# brokers/exchanges/prop firms/trading tools (an affiliate/referral/signup page,
+# even with no ?ref= param in the URL) and unrelated institutions their bio
+# happens to mention. discovery/website_enrich.py classify() treats a hit here
+# as broker_ref (skipped, recorded in contacts.broker_ref) -- never crawled, so
+# its generic support/info inbox is never mistaken for the creator's own email.
+# One host per line, lowercase; add to it whenever a crawl surfaces a new one
+# (see the run's staging_contact_enrichment log). Lines starting with # are comments.
+
+# VN retail brokers/fintechs
+vps.com.vn
+fpts.com.vn
+dnse.com.vn
+finhay.com.vn
+infina.vn
+aisec.com.vn
+topi.vn
+apex.vn
+unica.vn
+
+# Forex/CFD brokers and prop firms (beyond discovery/data/broker_brands.txt,
+# which is for a broker's own BRANDED account name/handle, not its domain)
+nordfx.com
+icmarkets.com.au
+mhmarkets.com
+mhmarkets-asia.com
+hfm.com
+vn-hfbroker.com
+itafx.com
+litefinance.com
+litefinance-viet.org
+kvbplus.com
+the5ers.com
+dominionfunding.trade
+
+# Crypto exchanges
+kucoin.com
+bingx.com
+bingxdao.com
+remitano.com
+remitano.net
+coinex.com
+viabtc.com
+
+# Trading tools / SaaS (their support inbox, not any one trader's own)
+tradezella.com
+trade-copier.com
+signalstart.com
+backcom.io
+backcom.info
+
+# Unrelated institutions/education a bio happens to link to
+littlefox.com
+mfa.gov.il
+unit.org.au
+kolmar.co.kr
+ou.edu.vn

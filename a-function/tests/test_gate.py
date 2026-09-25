@@ -31,6 +31,42 @@ class PassesFilterTests(unittest.TestCase):
         self.assertFalse(gate.passes_filter(entity))  # default min 20
         self.assertTrue(gate.passes_filter(entity, min_relevance=5))
 
+    def test_broker_own_page_filtered_out(self):
+        entity = {"display_name": "Exness Vietnam", "handle": "exness_vn",
+                  "bio_text": "forex trading broker, IB program", "follower_count": 50_000}
+        self.assertFalse(gate.passes_filter(entity))
+
+    def test_market_vn_requires_vietnamese_signal(self):
+        vn = {"display_name": "Đầu tư Forex", "bio_text": "tín hiệu forex trading mỗi ngày", "follower_count": 5000}
+        en = {"display_name": "FX Daily", "bio_text": "forex trading signals every day", "follower_count": 5000}
+        self.assertTrue(gate.passes_filter(vn, market="vn"))
+        self.assertFalse(gate.passes_filter(en, market="vn"))
+        self.assertTrue(gate.passes_filter(en))  # no market -> no market check
+
+    def test_ib_signal_regex(self):
+        for text in ("Trade Vàng - BackCom - Quỹ FTMO", "ngoai hoi hoan phi", "BOT Tín Hiệu",
+                     "DinhChienFX Corner", "link Exness bên dưới", "XAU/USD mỗi ngày"):
+            self.assertTrue(gate.IB_SIGNAL_RE.search(text), text)
+        for text in ("sfx sound design", "ib mình nhé shop", "vantage point consulting"):
+            self.assertFalse(gate.IB_SIGNAL_RE.search(text), text)
+
+    def test_vietnamese_signal_clears_relevance_floor(self):
+        # The substring lexicon has no Vietnamese terms, so this scores < 20 there.
+        entity = {"display_name": "Mạnh X", "bio_text": "Trade Vàng Thế Giới - BackCom", "follower_count": 5000}
+        self.assertTrue(gate.passes_filter(entity, min_relevance=30))
+
+    def test_obviously_irrelevant_dropped_unless_it_has_a_signal(self):
+        shop = {"display_name": "Tiệm Vàng Ba Hên", "bio_text": "mua bán vàng, investment trading", "follower_count": 5000}
+        news = {"display_name": "Tin tức Forex", "bio_text": "tin tức forex mỗi ngày", "follower_count": 5000}
+        self.assertFalse(gate.passes_filter(shop))
+        self.assertTrue(gate.passes_filter(news))
+
+    def test_engagement_floor_only_when_known(self):
+        entity = {"bio_text": "forex trading ib program", "follower_count": 5000}
+        self.assertFalse(gate.passes_filter({**entity, "engagement_pct": 0.1}, min_engagement_pct=0.5))
+        self.assertTrue(gate.passes_filter({**entity, "engagement_pct": 2.0}, min_engagement_pct=0.5))
+        self.assertTrue(gate.passes_filter({**entity, "engagement_pct": None}, min_engagement_pct=0.5))
+
     def test_gold_creator_in_window_passes(self):
         # Douyin gold channel: a gold analyst inside the 500-5k band clears the gate.
         entity = {"display_name": "现货黄金分析", "bio_text": "每日金价走势", "follower_count": 2000}
@@ -70,6 +106,10 @@ class RequireGateTests(unittest.TestCase):
     def test_raises_when_ungated_rows_exist(self):
         with self.assertRaises(RuntimeError):
             gate.require_gate(_FakeConn(3))
+
+    def test_llm_selection_refuses_while_ungated(self):
+        with self.assertRaises(RuntimeError):
+            gate.select_for_llm(_FakeConn(3))
 
     def test_passes_when_nothing_ungated(self):
         gate.require_gate(_FakeConn(0))  # no raise

@@ -4,6 +4,10 @@ Supports both discovery (searchQueries, like LinkedIn's keyword search) and
 direct profile lookup (profiles, for known usernames) with the same output
 schema either way, so to_entity/extract_engagement/extract_related_links
 below work regardless of which mode a given run used.
+
+Input keys checked against the actor's input schema (build 0.0.608).
+DEFAULT_INPUT is a one-query smoke test; the VN forex keyword set lives in
+inputs/tiktok_forex_vn.json (pipeline.py --platform tiktok --preset ...).
 """
 
 import re
@@ -18,7 +22,9 @@ DEFAULT_INPUT = {
     "searchQueries": ["forex trading"],
     "searchSection": "/user",
     "maxProfilesPerQuery": 10,
-    "resultsPerPage": 5,  # a few recent posts per discovered profile, enough to average engagement from
+    # Discovery is billed per video row: 1 per profile is the minimal identity
+    # (authorMeta rides on it). Engagement sampling is enrichment -- see build_input.
+    "resultsPerPage": 1,
     "shouldDownloadVideos": False,
     "shouldDownloadCovers": False,
 }
@@ -32,15 +38,17 @@ def build_input(overrides: dict) -> dict:
         run_input.pop("searchSection", None)
         run_input.pop("maxProfilesPerQuery", None)
         run_input["profiles"] = overrides["usernames"]
+        run_input["resultsPerPage"] = 5  # a few recent posts, enough to average engagement from
     elif overrides.get("search_query"):
         run_input["searchQueries"] = [overrides["search_query"]]
     return run_input
 
 
 def to_entity(item: dict) -> dict:
-    """Best-effort mapping for profile fields (unverified against a real run, unlike
-    linkedin.py); engagement fields in extract_engagement() below are verified
-    against Apify's actor docs.
+    """Map one video row's author to an entity. Verified against real runs
+    (authorMeta.id/name/nickName/signature/bioLink/avatar/fans); the actor's
+    NOT_FOUND error rows carry no authorMeta, so they map to platform_id=None
+    and db.loader skips them.
 
     email_norm/phone_norm are pulled from the bio text -- many forex IBs paste a
     contact email or Telegram/Zalo number in their TikTok signature, and those
