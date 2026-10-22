@@ -3,10 +3,15 @@
  * - Ngôn ngữ EN (mặc định) / VI / 中文: nút trên header, phím L, hoặc ?lang=vi|zh
  * - Đối tượng MIB/IB: trong danh sách slide (nút menu) hoặc ?a=ib
  * - Trình bày: nút "Present", phím P, hoặc ?present
+ * - Slide KM MIB/IB, Ví dụ, So sánh cần mã truy cập: nội dung thật nằm trong locked.js (mã hóa, xem lock.js và scripts/lock.mjs)
  * Logic tính toán nằm ở calc.js, dates.js, contact.js (có test trong tests/).
  */
 (function () {
-  const D = window.MIB, C = window.MIBCalc, Dt = window.MIBDates, K = window.MIBContact, S = D.sections, P = D.presenter;
+  const D = window.MIB, C = window.MIBCalc, Dt = window.MIBDates, K = window.MIBContact, Q = window.MIBQR, S = D.sections, P = D.presenter;
+  const Lk = window.PPLock, PR = window.PROMOS; // PPLock: mở khóa bằng mã (lock.js); PROMOS: dữ liệu trang ưu đãi (promotions/promos-data.js)
+  // Bản gốc (đang khóa) của các slide và dữ liệu số: giữ lại để "Khóa lại" khôi phục
+  const LOCK_SECTIONS = ["m1", "m2", "m3", "m5", "so-sanh", "ib", "faq"], LOCK_DATA = ["mibTiers", "mibTierPresets", "ibTiers", "competitors"];
+  const STUBS = Object.fromEntries(LOCK_SECTIONS.map((k) => [k, S[k]])), DATA0 = Object.fromEntries(LOCK_DATA.map((k) => [k, D[k]]));
   const ORDER = ["bia", "phap-ly", "nam-dong", "tai-khoan", "ecn-q4", "ecn-calc", "lich-tien", "m1", "m2", "m3", "m4", "m5", "so-sanh", "ib", "uu-dai", "km-khac", "bat-dau", "faq"];
   const RISK = new Set(["nam-dong", "tai-khoan", "ecn-q4", "ecn-calc", "m2", "m4", "m5", "so-sanh", "uu-dai", "km-khac", "bat-dau"]); // I1 tự đặt dòng rủi ro
   const LANGS = [["en", "EN"], ["vi", "VI"], ["zh", "中文"]];
@@ -52,6 +57,9 @@
   };
   const h2hInit = () => ({ us: { account: "STD", ecn: false, ...h2hVol() }, them: { broker: "XM", cls: "std", extra: 0, name: "", costFx: "", costGold: "", ...h2hVol(), ...h2hRates("XM", "std") } });
 
+  // Số mặc định của máy tính "IB mới": 10 khách trực tiếp (6 hoạt động), 50.000 net deposit, 280 lot, tài khoản STD
+  function ibDefaults() { return { lotsFx: 200, lotsGold: 80, account: "STD", deposit: 50000, clients: 10, active: 6, joined: 5, ftd: 500 }; }
+
   const state = {
     lang: pick(qs.get("lang") || store.get("mib-lang"), LANGS.map((l) => l[0]), "en"),
     aud: pick(qs.get("a") || store.get("mib-aud"), ["mib", "ib"], "mib"),
@@ -59,11 +67,14 @@
     idx: 0, step: 0, notes: false, started: 0, cur: null, menu: false,
     calc: { ...D.example }, ecn: { ...D.ecn.defaults }, metal: "fx", cmp: "std",
     promo: "mib", cmpView: "h2h", h2h: h2hInit(), tierEdit: false, tiers: loadTiers(),
-    addons: { ecn: false, swap: false }, swap: { fee: 2000, nd: 40000 }, client: { ...D.clientCashback.defaults }, extra: { filter: "all", showPrivate: false },
+    addons: { ecn: false, swap: false }, swap: { fee: 2000, nd: 40000 }, client: { ...D.clientCashback.defaults }, extra: { filter: "all" },
     pay: { trade: isoOf(now()), apply: null, on: {}, calMonth: null },
+    // Slide Ví dụ: "mib" (MIB có Sub-IB) hoặc "ib" (IB mới, chưa có Sub-IB; mặc định khi xem với đối tượng IB)
+    m5mode: (qs.get("a") || store.get("mib-aud")) === "ib" ? "ib" : "mib", ibc: ibDefaults(), ibAdd: { ecn: false, swap: false }, ibp: {},
     contact: { name: "", phone: "", email: "", note: "", status: "", errors: {} },
-    // Slide So sánh khóa tới khi bấm một link đăng ký; đã bấm thì nhớ trong trình duyệt. ?lock khóa lại cho lần mở này (để demo).
-    reg: !qs.has("lock") && store.get("mib-reg") === "1", regMenu: false,
+    regMenu: false,
+    // Mã truy cập: chưa nhập đúng thì 3 slide (KM, Ví dụ, So sánh) chỉ hiện khung khóa
+    unlocked: false, code: "", lockMsg: "",
     banner: true, first: true,
   };
 
@@ -83,7 +94,7 @@
   const lot = (n) => new Intl.NumberFormat(loc(), { maximumFractionDigits: 2 }).format(n);
   const dfmt = (iso) => new Intl.DateTimeFormat(loc(), { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
   const ic = (name, cls = "") => `<svg class="ic ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
-  // Ảnh thật đặt trong img/; thiếu file thì imgFail() thay bằng khung placeholder ghi tên file cần thêm.
+  // Ảnh thật đặt trong mib-pitch/img/; thiếu file thì imgFail() thay bằng khung placeholder ghi tên file cần thêm.
   const img = (file, alt, cls = "", icon = "image", pos = "") =>
     `<img src="img/${file}" alt="${esc(alt)}" class="${cls}" data-f="${file}" data-ic="${icon}"${pos ? ` style="object-position:${pos}"` : ""} onerror="imgFail(this)">`;
   const logo = (file = "logo-tmgm-white.webp", cls = "") =>
@@ -287,6 +298,10 @@
     if (r.ecn) { cols.push([acc, r.ecn, "lime", r.ecn, "+", s.ecnBar]); acc += r.ecn; }
     if (r.swap.total) cols.push([acc, r.swap.total, "lime", r.swap.total, "+", s.swapBar]);
     cols.push([0, r.total, "total", r.total, "", b[4]]);
+    return wfMarkup(cols, top);
+  };
+  // cols = [[đáy, cao, màu, số, dấu, nhãn]]
+  const wfMarkup = (cols, top) => {
     const aria = cols.map((c) => `${L(c[5])}: ${c[4]}${usd(c[3])}`).join("; ");
     return `<div class="wf" role="img" aria-label="${esc(aria)}">${cols.map(([bot, h, k, v, sign, lbl]) => `<div class="wf-col">
       <div class="wf-area"><div class="wf-bar wf-bar--${k}" style="bottom:${(bot / top) * 100}%;height:${(h / top) * 100}%"><span>${sign}${num(v)}</span></div></div>
@@ -727,10 +742,118 @@
     </div>`);
   };
 
+  // ---------- slide 10, chế độ "IB mới": một tháng của IB chưa có Sub-IB + ưu đãi khác như add-on ----------
+  const m5Switch = () => { const i = S.m5.ib; return `<div class="promo-switch"><span class="addons-l">${L(i.modeLabel)}</span>${segBtns("m5mode", [["mib", L(i.modeMib)], ["ib", L(i.modeIb)]], state.m5mode, L(i.modeLabel))}</div>`; };
+  const ibEcnUsable = () => ecnActive() && D.accounts.some((a) => a.q4 && a.name === state.ibc.account);
+  const ibAddonList = () => xpLive().filter(({ p, st }) => p.calc && st.state === "active"); // chỉ ưu đãi đang nhận đăng ký
+  const ibAddonRes = () => {
+    const c = state.ibc, n = Math.min(c.joined, c.clients), lots = c.lotsFx + c.lotsGold, k = Math.max(1, c.clients);
+    const ctx = { n, ftd: c.ftd, deposit: c.deposit / k, lots: lots / k, ibDeposit: c.deposit, ibLots: lots, active: c.active, points: D.points };
+    return ibAddonList().filter(({ p }) => state.ibp[p.key]).map(({ p }) => ({ p, r: C.promoAddon({ ...p.calc, rows: p.table && p.table.rows }, ctx) }));
+  };
+  const ibCalc = () => {
+    const c = state.ibc, res = ibAddonRes(), ticket = Math.max(0, ...res.filter((x) => x.r.kind === "ib" && x.r.ok).map((x) => x.r.value));
+    const r = C.ibMonth({ ...c, addons: state.ibAdd, swapFee: state.swap.fee, swapNd: state.swap.nd, ticket }, D.accounts, state.tiers.ib, ecnActive() ? D.ecn : null, D.swapTiers);
+    return { r, res };
+  };
+  const ibAddonChips = () => {
+    const s = S.m5;
+    return `<span class="addons-l">${L(s.addonsLabel)}</span>
+      <button type="button" class="chip-toggle" data-act="ib-addon" data-v="ecn" aria-pressed="${state.ibAdd.ecn}"${ibEcnUsable() ? "" : " disabled"}>${ic("zap")}<span>${L(s.addonEcn)}</span></button>
+      <button type="button" class="chip-toggle" data-act="ib-addon" data-v="swap" aria-pressed="${state.ibAdd.swap}">${ic("moon")}<span>${L(s.addonSwap)}</span></button>
+      ${!ibEcnUsable() && ecnActive() ? `<small class="fine">${L(s.ecnHint)}</small>` : ""}`;
+  };
+  const ibSwapInputs = () => {
+    const s = S.m5;
+    return state.ibAdd.swap ? `<label class="field"><span>${L(s.swapFee)}</span><input type="number" min="0" step="500" value="${state.swap.fee}" data-swap="fee" inputmode="numeric"></label>
+      <label class="field"><span>${L(s.swapNd)}</span><input type="number" min="0" step="5000" value="${state.swap.nd}" data-swap="nd" inputmode="numeric"></label>` : "";
+  };
+  const ibWaterfall = () => {
+    const i = S.m5.ib, { r } = ibCalc(), top = Math.max(r.rebate, r.total, 1) * 1.15;
+    const cols = [[0, r.rebate, "gray", r.rebate, "", i.bars.rebate]];
+    let acc = r.rebate;
+    const add = (v, lbl) => { if (v > 0) { cols.push([acc, v, "lime", v, "+", lbl]); acc += v; } };
+    add(r.bonus, i.bars.bonus); add(r.ticket, i.bars.ticket); add(r.ecn, S.m5.ecnBar); add(r.swap.total, S.m5.swapBar);
+    cols.push([0, r.total, "total", r.total, "", i.bars.total]);
+    return wfMarkup(cols, top);
+  };
+  const ibOut = () => {
+    const s = S.m5, i = s.ib, { r } = ibCalc(), c = state.ibc, first = state.tiers.ib[0];
+    const tier = r.tier ? fill(L(s.tier), { d: usd(r.tier.deposit), l: num(r.tier.lots) }) : fill(L(s.noTier), { d: usd(first.deposit), l: num(first.lots) });
+    const need = [r.needLots > 0 && fill(L(s.needLots), { l: num(r.needLots) }), r.needDeposit > 0 && fill(L(s.needDep), { d: usd(r.needDeposit) })].filter(Boolean).join(L(s.and));
+    const next = r.next ? fill(L(s.nextTier), { r: usd(r.next.reward), need }) : L(s.topTier);
+    const elig = r.eligible ? "" : `<p class="warn warn--sm">${ic("alert")}<span>${fill(L(i.notEligible), { c: C.IB_MIN_CLIENTS, c0: c.clients, a: C.IB_MIN_ACTIVE, a0: c.active })}</span></p>`;
+    const anyAddon = r.ecn > 0 || r.swap.total > 0;
+    const swapLines = state.ibAdd.swap ? `<p class="ecn-row"><span>${L(s.swapWeekly)}</span><b>+${usd(r.swap.weekly)}</b></p>
+      <p class="ecn-row"><span>${r.swap.pct ? fill(L(s.swapMonthly), { p: r.swap.pct }) : L(s.swapMonthlyNone)}</span><b>+${usd(r.swap.monthly)}</b></p>` : "";
+    return `<p class="total"><span>${L(i.bars.total)}</span><b>${usd(r.total)}</b></p>
+      ${anyAddon ? `<p class="ecn-row"><span>${L(s.baseTotal)}</span><b>${usd(r.base)}</b></p>` : ""}
+      ${r.ticket > 0 ? `<p>${ic("gift")} ${L(i.ticketNote)}</p>` : `<p>${ic("trophy")} ${tier}</p><p>${ic("arrow")} ${next}</p>`}${elig}
+      ${r.ecn ? `<p>${ic("zap")} ${fill(L(s.ecnIn), { v: usd(r.ecn) })}</p>` : ""}${swapLines}
+      <p class="fine">${fill(L(s.gross), { g: usd(r.gross) })} ${state.ibAdd.swap ? L(s.swapNote) : L(s.noSwap)}${r.ecn ? ` ${L(i.ecnNote)}` : ""}</p>`;
+  };
+  // Khung "Ưu đãi khác": bật từng ưu đãi còn hạn; thưởng của IB cộng vào thu nhập (ở trên), khách nhận thì ghi riêng, không cộng
+  const ibPromoLine = ({ p, r }) => {
+    const i = S.m5.ib, cur = L(i.cur[r.cur]);
+    if (r.cur === "ticket") return `<p class="ecn-row"><span>${L(p.name)}</span><b>${r.ok ? `+${usd(r.value)}` : L(i.notOk)}</b></p>`;
+    if (r.cur === "draw") return `<p class="ecn-row"><span>${L(p.name)} · ${cur}</span><b>${fill(L(i.prizes), { p: num(r.prizes, 1) })}</b></p>`;
+    if (r.cur === "gift") return `<p class="ecn-row"><span>${L(p.name)}</span><b>${cur}</b></p>`;
+    return `<p class="ecn-row"><span>${L(p.name)} · ${cur}${r.ok ? "" : ` · ${L(i.notOk)}`}</span><b>${r.ok ? `${usd(r.per)} ${L(i.perClient)}` : "—"}</b></p>`;
+  };
+  const ibPromos = () => {
+    const i = S.m5.ib, list = ibAddonList(), res = ibAddonRes();
+    const chip = ({ p }) => `<button type="button" class="chip-toggle" data-act="ib-promo" data-v="${p.key}" aria-pressed="${!!state.ibp[p.key]}">${ic(p.icon)}<span>${L(p.name)}</span></button>`;
+    const ibs = list.filter(({ p }) => p.calc.kind === "ib"), cls = list.filter(({ p }) => p.calc.kind !== "ib");
+    const cl = res.filter((x) => x.r.kind !== "ib");
+    const sum = (cur) => cl.filter((x) => x.r.cur === cur).reduce((t, x) => t + x.r.total, 0);
+    const prizes = cl.filter((x) => x.r.cur === "draw").reduce((t, x) => t + x.r.prizes, 0);
+    const totals = cl.length ? `<div class="ibp-total"><b>${L(i.clientTotal)}</b>${[["credit", sum("credit")], ["cash", sum("cash")], ["points", sum("points")]].filter(([, v]) => v > 0).map(([k, v]) => `<span>${usd(v)} <small>${L(i.cur[k])}</small></span>`).join("")}${prizes > 0 ? `<span>${fill(L(i.prizes), { p: num(prizes, 1) })}</span>` : ""}</div>` : "";
+    const exclCount = new Set(cls.map(({ p }) => p.calc.excl).filter(Boolean)).size && cls.filter(({ p }) => p.calc.excl === "credit").length > 1;
+    return `<h3>${ic("gift")} ${L(i.promosTitle)}</h3><p class="fine">${L(i.promosHint)}</p>
+      ${ibs.length ? `<p class="ibp-h">${L(i.groupIb)}</p><div class="addons">${ibs.map(chip).join("")}</div>${res.filter((x) => x.r.kind === "ib").map(ibPromoLine).join("")}<p class="fine">${L(i.ticketExcl)}</p>` : ""}
+      <p class="ibp-h">${L(i.groupClient)}</p>
+      ${cls.length ? `<div class="addons">${cls.map(chip).join("")}</div>${cl.map(ibPromoLine).join("")}${totals}` : `<p class="fine">${L(i.noPromos)}</p>`}
+      ${exclCount ? `<p class="warn warn--sm">${ic("alert")}<span>${L(i.exclCredit)}</span></p>` : ""}
+      <p class="fine">${L(i.onlineNote)}</p>`;
+  };
+  const m5Ib = () => {
+    const s = S.m5, i = s.ib, c = state.ibc;
+    const field = (k, attrs, label = i.inputs[k]) => `<label class="field"><span>${L(label)}</span><input type="number" data-ibc="${k}" value="${c[k]}" ${attrs} inputmode="numeric"></label>`;
+    return sec("m5", `${m5Switch()}
+    <div class="ex">
+      <div class="ex-chart"><div class="addons" id="ib-addons">${ibAddonChips()}</div><div id="ib-wf">${ibWaterfall()}</div><p class="legend-txt">${L(i.legend)}</p><div id="ib-out" class="calc-out" aria-live="polite">${ibOut()}</div></div>
+      <form class="card calc" onsubmit="return false"><h3>${L(s.calcTitle)}</h3>
+        ${field("lotsFx", 'min="0" step="50"', s.inputs.lotsFx)}${field("lotsGold", 'min="0" step="50"', s.inputs.lotsGold)}
+        <label class="field"><span>${L(s.inputs.account)}</span><select data-ibc="account">${D.accounts.map((a) => `<option${a.name === c.account ? " selected" : ""}>${a.name}</option>`).join("")}</select></label>
+        ${field("deposit", 'min="0" step="10000"')}${field("clients", 'min="0" step="1"')}${field("active", 'min="0" step="1"')}${field("joined", 'min="0" step="1"')}${field("ftd", 'min="0" step="100"')}
+        <div id="ib-swap-in">${ibSwapInputs()}</div>
+        <button type="button" class="btn btn--ghost" data-act="ib-reset">${L(s.reset)}</button>
+      </form>
+    </div>
+    <div class="card ibp" id="ib-promos">${ibPromos()}</div>
+    <p class="illus">${ic("alert")}${L(D.ui.illustrative)}</p>`, "sec--soft", L(i.title));
+  };
+  function toggleIbPromo(key) {
+    const hit = ibAddonList().find(({ p }) => p.key === key);
+    if (!hit) return;
+    state.ibp[key] = !state.ibp[key];
+    if (state.ibp[key] && hit.p.calc.excl) for (const { p } of ibAddonList()) if (p.key !== key && p.calc.excl === hit.p.calc.excl) state.ibp[p.key] = false; // loại trừ nhau (vd Halloween và 50% Credit)
+    updateIb();
+  }
+  function updateIb() {
+    keepFocus(() => {
+      if ($("#ib-addons")) $("#ib-addons").innerHTML = ibAddonChips();
+      if ($("#ib-swap-in")) $("#ib-swap-in").innerHTML = ibSwapInputs();
+      if ($("#ib-promos")) $("#ib-promos").innerHTML = ibPromos();
+    });
+    if ($("#ib-wf")) { $("#ib-wf").innerHTML = ibWaterfall(); $("#ib-out").innerHTML = ibOut(); }
+  }
+
   R.m5 = () => {
+    if (state.m5mode === "ib") return m5Ib();
     const s = S.m5, c = state.calc, inp = s.inputs;
     const field = (k, attrs) => `<label class="field"><span>${L(inp[k])}</span><input type="number" data-calc="${k}" value="${c[k]}" ${attrs} inputmode="numeric"></label>`;
-    return sec("m5", `${fold(s.sampleTitle, `<div class="mini-people">${ic("user").repeat(D.example.subIBs)}</div>
+    return sec("m5", `${m5Switch()}${fold(s.sampleTitle, `<div class="mini-people">${ic("user").repeat(D.example.subIBs)}</div>
         <ul class="ex-sample">${s.sample.map((x) => `<li>${L(x)}</li>`).join("")}</ul><p class="fine">${L(s.sampleNote)}</p>`, "user")}
     <div class="ex">
       <div class="ex-chart"><div class="addons" id="addons-m5">${addonChips(true)}</div><div id="wf">${waterfall()}</div><p class="legend-txt">${L(s.legend)}</p><div id="calc-out" class="calc-out" aria-live="polite">${calcOut()}</div></div>
@@ -743,17 +866,6 @@
       </form>
     </div>
     <p class="illus">${ic("alert")}${L(D.ui.illustrative)}</p>`, "sec--soft");
-  };
-
-  // Chưa bấm link đăng ký: công cụ so sánh hiện mờ phía sau (không bấm/nhập được), phía trước là khung có 2 nút đăng ký
-  const cmpLocked = (body) => {
-    const u = D.ui.reg;
-    return `<div class="cmp-lock">
-      <div class="cmp-gate" data-gate="1" role="region" aria-labelledby="gate-h"><div class="cmp-gate-card">
-        <span class="cmp-gate-ic">${ic("lock")}</span><h3 id="gate-h">${L(u.gateTitle)}</h3><p>${L(u.gateText)}</p>${registerPair("btn--lg")}
-      </div></div>
-      <div class="cmp-lock-preview" inert aria-hidden="true">${body}</div>
-    </div>`;
   };
 
   R["so-sanh"] = () => {
@@ -779,7 +891,7 @@
         <button type="button" class="btn btn--ghost" data-act="reset">${L(S.m5.reset)}</button>
       </form>
     </div>`;
-    return sec("so-sanh", `${state.reg ? body : cmpLocked(body)}${illus}`, "sec--soft");
+    return sec("so-sanh", `${body}${illus}`, "sec--soft");
   };
 
   R.ib = () => {
@@ -841,42 +953,39 @@
     <p class="fine">${L(s.source)}</p>`, "mesh mesh--light");
   };
 
-  // ---------- slide Ưu đãi khác: ưu đãi nhỏ + marketing, mỗi mục một dòng gập ----------
+  // ---------- slide Ưu đãi khác: lưới thẻ; dữ liệu lấy từ trang ưu đãi (promotions/promos-data.js) + phần mã hóa ----------
   const dshort = (iso) => new Intl.DateTimeFormat(loc(), { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${iso}T00:00:00Z`));
-  const xpLive = () => D.extraPromos.map((p) => ({ p, st: Dt.promoStatus(p, isoOf(now())) })).filter((x) => x.st.state !== "ended");
-  const xpShown = (f) => xpLive().filter(({ p }) => (f === "all" || p.group === f) && (state.extra.showPrivate || p.share !== "private"));
+  const GROUP_ORDER = { small: 0, marketing: 1, followup: 2 };
+  const allPromos = () => [...((PR && PR.extraPromos) || []), ...(state.unlocked ? D.privatePromos || [] : [])];
+  const xpLive = () => allPromos().map((p) => ({ p, st: Dt.promoStatus(p, isoOf(now())) }))
+    .filter((x) => x.st.state !== "ended" && !x.p.hidden)
+    .sort((a, b) => (a.p.order ?? 999) - (b.p.order ?? 999) || (GROUP_ORDER[a.p.group] ?? 9) - (GROUP_ORDER[b.p.group] ?? 9) || a.p.until.localeCompare(b.p.until));
+  const xpShown = (f) => xpLive().filter(({ p }) => f === "all" || p.group === f);
+  const promoHref = (p) => `${D.meta.promotionsUrl}?lang=${state.lang}${p ? "#" + p.key : ""}`;
   const xpDue = (p, st, s) => {
     if (st.state === "upcoming") return `<em class="xp-tag">${fill(L(s.from), { d: dshort(p.from) })}</em>`;
+    if (st.state === "closed") return `<em class="xp-tag xp-tag--closed">${fill(L(s.closed), { d: dshort(p.until) })}</em>`;
     const txt = st.daysLeft === 0 ? L(s.lastDay) : st.level === "ok" ? fill(L(s.until), { d: dshort(p.until) }) : fill(L(s.left), { n: st.daysLeft });
     return `<em class="xp-tag xp-tag--${st.level}">${txt}</em>`;
   };
-  const xpRow = ({ p, st }) => {
+  const xpCard = ({ p, st }) => {
     const s = S["km-khac"], priv = p.share === "private";
-    const table = p.table ? `<div class="table-wrap"><table class="tbl tbl--xp"><thead><tr>${p.table.cols.map((c) => `<th scope="col">${L(c)}</th>`).join("")}</tr></thead>
-      <tbody>${p.table.rows.map(([nd, lots, item, cash]) => `<tr><td>${usd(nd)}</td><td>${num(lots)}</td><td>${esc(item)}</td><td>${usd(cash, 2)}</td></tr>`).join("")}</tbody></table></div>` : "";
-    return `<details class="xp${priv ? " xp--private" : ""}" data-xp="${p.key}">
-      <summary><span class="xp-ic">${ic(p.icon)}</span><span class="xp-name"><b>${L(p.name)}</b><small>${L(p.value)}</small></span>
-        <span class="xp-tags"><em class="xp-tag xp-tag--seg">${L(p.seg)}</em>${priv ? `<em class="xp-tag xp-tag--priv">${L(s.private)}</em>` : ""}${xpDue(p, st, s)}</span></summary>
-      <div class="xp-body">${table}<ul class="elig">${p.rules.map((r) => `<li>${ic("check")}<span>${L(r)}</span></li>`).join("")}</ul>
-        ${p.note ? `<p class="warn warn--sm">${ic("alert")}<span>${L(p.note)}</span></p>` : ""}
-        ${p.url ? `<a class="xp-link" href="${p.url}" target="_blank" rel="noopener">${L(s.link)} ${ic("ext")}</a>` : ""}</div>
-    </details>`;
-  };
-  const xpList = () => {
-    const s = S["km-khac"], f = state.extra.filter, items = xpShown(f);
-    if (!items.length) return `<p class="fine">${L(s.empty)}</p>`;
-    const small = items.filter((x) => x.p.group === "small"), mkt = items.filter((x) => x.p.group === "marketing");
-    return `${small.map(xpRow).join("")}${mkt.length && f === "all" ? `<p class="xp-group">${L(s.fMkt)}</p>` : ""}${mkt.map(xpRow).join("")}`;
+    return `<a class="xp-card xp-card--${p.group}${priv ? " xp-card--private" : ""}" href="${esc(promoHref(p))}" target="_blank" rel="noopener" data-xp="${p.key}">
+      <span class="xp-ic">${ic(p.icon)}</span>
+      <span class="xp-name"><b>${L(p.name)}</b><small>${L(p.headline || p.value)}</small></span>
+      <span class="xp-tags"><em class="xp-tag xp-tag--seg">${L(p.seg)}</em>${priv ? `<em class="xp-tag xp-tag--priv">${L(s.private)}</em>` : ""}${xpDue(p, st, s)}</span>
+      <span class="xp-go">${L(s.see)} ${ic("ext")}</span></a>`;
   };
 
   R["km-khac"] = () => {
-    const s = S["km-khac"], nPriv = xpLive().filter((x) => x.p.share === "private").length;
+    const s = S["km-khac"], f = state.extra.filter, items = xpShown(f), nPriv = items.filter((x) => x.p.share === "private").length;
     const chip = (v, label) => [v, `${L(label)} <small>${xpShown(v).length}</small>`];
+    const hint = !state.unlocked && Lk && window.PP_LOCKED ? `<p class="warn warn--sm xp-private-hint">${ic("lock")}<span>${L(s.privateHint)}</span></p>` : "";
     return sec("km-khac", `<p class="lead">${L(s.lead)}</p>
-    <div class="xp-bar">${segBtns("xp-filter", [chip("all", s.fAll), chip("small", s.fSmall), chip("marketing", s.fMkt)], state.extra.filter, L(s.filterLabel))}
-      ${nPriv ? `<button type="button" class="chip-toggle xp-priv-btn" data-act="xp-private" aria-pressed="${state.extra.showPrivate}">${ic("users")}<span>${fill(L(s.showPrivate), { n: nPriv })}</span></button>` : ""}</div>
-    ${state.extra.showPrivate && nPriv ? `<p class="warn warn--sm xp-private-warn">${ic("alert")}<span>${L(s.privateWarn)}</span></p>` : ""}
-    <div class="xp-list">${xpList()}</div>
+    <div class="xp-bar">${segBtns("xp-filter", [chip("all", s.fAll), chip("small", s.fSmall), chip("marketing", s.fMkt), chip("followup", s.fFollow)], f, L(s.filterLabel))}
+      <a class="btn btn--blue btn--sm" href="${esc(promoHref())}" target="_blank" rel="noopener">${L(s.open)} ${ic("ext")}</a></div>
+    ${hint}${nPriv ? `<p class="warn warn--sm xp-private-warn">${ic("alert")}<span>${L(s.privateWarn)}</span></p>` : ""}
+    <div class="xp-grid">${items.length ? items.map(xpCard).join("") : `<p class="fine">${L(s.empty)}</p>`}</div>
     <p class="fine">${L(s.shared)} ${L(s.source)}</p>`, "sec--soft");
   };
 
@@ -889,7 +998,7 @@
           <div class="contact-me">${img("presenter.webp", P.name, "avatar", "user")}<div><b>${P.name}</b><span>${L(P.title)}</span>${tgLink()}${waLink()}</div></div>
           <div class="qrs">
             <figure>${img("qr-telegram.png", "QR Telegram", "qr", "qr")}<figcaption>Telegram @${P.telegram}</figcaption></figure>
-            <figure>${img("qr-whatsapp.png", "QR WhatsApp", "qr", "qr")}<figcaption>WhatsApp ${P.whatsapp}</figcaption></figure>
+            <figure>${Q.svg(`https://wa.me/${P.whatsappLink}`, { size: 112, label: `QR WhatsApp ${P.whatsapp}` })}<figcaption>WhatsApp ${P.whatsapp}</figcaption></figure>
           </div>
           ${registerPair("btn--lg")}
         </div>
@@ -911,6 +1020,59 @@
     </div>`, "sec--soft");
   };
 
+  // ---------- khóa bằng mã truy cập ----------
+  const isLocked = (id) => !!S[id].locked;
+  const lockMsgFor = () => fill(L(D.ui.lock.mailBody), { name: P.name.split(" ")[0] });
+  const lockContacts = () => `<div class="lock-contact"><span>${L(D.ui.lock.ask)}</span>
+      <a class="btn btn--lime btn--sm" href="https://wa.me/${P.whatsappLink}?text=${encodeURIComponent(lockMsgFor())}" target="_blank" rel="noopener">${ic("whatsapp")}<span>WhatsApp</span></a>
+      <a class="btn btn--blue btn--sm" href="https://t.me/${P.telegram}" target="_blank" rel="noopener">${ic("send")}<span>Telegram</span></a>
+      <a class="btn btn--ghost btn--sm" href="mailto:${D.meta.contactEmail}?subject=${encodeURIComponent(L(D.ui.lock.mailSubject))}&body=${encodeURIComponent(lockMsgFor())}">${ic("send")}<span>Email</span></a></div>`;
+  const lockPanel = () => {
+    const u = D.ui.lock;
+    return `<div class="lock-card card">
+      <span class="lock-ic">${ic("lock")}</span><h3>${L(u.title)}</h3><p>${L(u.text)}</p>
+      <form class="lock-form" data-form="unlock" onsubmit="return false">
+        <label class="field"><span>${L(u.codeLabel)}</span><input type="text" data-code="1" value="${esc(state.code)}" placeholder="${esc(L(u.placeholder))}" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="30"></label>
+        <button type="submit" class="btn btn--lime">${ic("lock")}<span>${L(u.submit)}</span></button>
+      </form>
+      <p class="lock-msg" role="alert">${esc(state.lockMsg)}</p>${lockContacts()}</div>`;
+  };
+  const lockedSection = (id) => sec(id, lockPanel(), "sec--soft sec--locked", L(S[id].title));
+  // Slide KM, Ví dụ, So sánh: chưa mở khóa thì chỉ hiện khung nhập mã
+  ["m2", "m5", "so-sanh"].forEach((id) => { const real = R[id]; R[id] = () => (isLocked(id) ? lockedSection(id) : real()); });
+
+  // Nhận dữ liệu đã giải mã: nạp số, chữ các slide và ưu đãi riêng
+  function applyLocked(payload) {
+    for (const k of LOCK_DATA) if (payload.data && payload.data[k] !== undefined) D[k] = payload.data[k];
+    for (const [id, sec] of Object.entries(payload.sections || {})) S[id] = { ...sec };
+    D.privatePromos = payload.promos || [];
+    state.tiers = loadTiers();
+    state.h2h = h2hInit();
+    state.unlocked = true; state.code = ""; state.lockMsg = "";
+  }
+  function relock() {
+    if (Lk) Lk.forget();
+    for (const k of LOCK_DATA) D[k] = DATA0[k];
+    for (const id of LOCK_SECTIONS) S[id] = STUBS[id];
+    D.privatePromos = [];
+    state.tiers = loadTiers();
+    state.h2h = h2hInit();
+    state.unlocked = false; state.code = ""; state.lockMsg = ""; state.menu = false;
+    render();
+  }
+  const setLockMsg = (t) => { state.lockMsg = t; document.querySelectorAll(".lock-msg").forEach((el) => (el.textContent = t)); };
+  async function tryUnlock() {
+    const u = D.ui.lock;
+    setLockMsg(L(u.checking));
+    try {
+      const data = await Lk.unlock(state.code);
+      if (!data) return setLockMsg(L(u.wrong));
+      applyLocked(data);
+      render();
+      toast(L(u.unlocked));
+    } catch (e) { setLockMsg(L(u.unsupported)); }
+  }
+
   // ---------- khung trang ----------
   const banner = () => {
     const until = new Date(`${D.meta.validUntil}T23:59:59`);
@@ -923,7 +1085,7 @@
   // Thanh menu: logo · nút mở danh sách slide · ngôn ngữ · Register · Present. Đổi MIB/IB nằm trong danh sách slide.
   const header = () => {
     const ids = visible(), cur = ids.includes(state.cur) ? state.cur : ids[0];
-    const items = ids.map((id) => `<a class="menu-item${id === cur ? " is-cur" : ""}" href="#${id}" data-go="${id}"${id === cur ? ' aria-current="true"' : ""}><b>${id === "faq" ? "Q&A" : String(ids.indexOf(id) + 1).padStart(2, "0")}</b><span>${L(S[id].label)}</span></a>`).join("");
+    const items = ids.map((id) => `<a class="menu-item${id === cur ? " is-cur" : ""}" href="#${id}" data-go="${id}"${id === cur ? ' aria-current="true"' : ""}><b>${id === "faq" ? "Q&A" : String(ids.indexOf(id) + 1).padStart(2, "0")}</b><span>${L(S[id].label)}</span>${isLocked(id) ? ic("lock", "menu-lock") : ""}</a>`).join("");
     return `<header class="top"><div class="wrap top-in">
       <a class="brand" href="#bia" data-go="bia">${logo("logo-tmgm.webp", "logo--dark")}<span class="brand-sub">${L(D.ui.brandSub)}</span></a>
       <button type="button" class="menu-btn" data-act="menu" data-menu="1" aria-expanded="${state.menu}" aria-controls="menu-panel"><span class="menu-label">${menuLabel(cur)}</span>${ic("chevron")}</button>
@@ -934,7 +1096,7 @@
       </div>
       <nav id="menu-panel" class="menu-panel"${state.menu ? "" : " hidden"} data-menu="1" aria-label="${esc(L(D.ui.menu))}">
         <div class="menu-grid">${items}</div>
-        <div class="menu-foot"><span>${L(D.ui.audience)}</span>${segBtns("aud", [["mib", "MIB"], ["ib", "IB"]], state.aud, L(D.ui.audience))}</div>
+        <div class="menu-foot"><span>${L(D.ui.audience)}</span>${segBtns("aud", [["mib", "MIB"], ["ib", "IB"]], state.aud, L(D.ui.audience))}${state.unlocked ? `<button type="button" class="btn btn--ghost btn--sm" data-act="relock">${ic("lock")}<span>${L(D.ui.lock.relock)}</span></button>` : ""}</div>
       </nav>
     </div><div class="top-progress" aria-hidden="true"><i style="width:${Math.round(((ids.indexOf(cur) + 1) / ids.length) * 100)}%"></i></div></header>`;
   };
@@ -1000,20 +1162,6 @@
     state.regMenu = false;
     setTimeout(() => { refreshHeader(); if (focusBtn) { const b = $('[data-act="reg-menu"]'); if (b && b.focus) b.focus(); } }, 0);
   };
-
-  // Bấm một link đăng ký bất kỳ (header, bìa, slide cuối, footer, khung khóa) thì mở khóa slide So sánh và nhớ trong trình duyệt.
-  // Vẽ lại sau một nhịp để trình duyệt kịp mở link vừa bấm ở tab mới.
-  function unlockCompare(fromGate) {
-    if (state.reg) return;
-    state.reg = true;
-    store.set("mib-reg", "1");
-    setTimeout(() => {
-      refresh("so-sanh");
-      const b = fromGate && $('[data-act="cmpview"][aria-pressed="true"]');
-      if (b && b.focus) b.focus();
-    }, 0);
-    toast(L(D.ui.reg.unlocked));
-  }
 
   function setupReveal() {
     if (!("IntersectionObserver" in window) || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -1118,6 +1266,7 @@
   function setAud(v) {
     const id = visible()[state.idx];
     state.aud = v;
+    state.m5mode = v === "ib" ? "ib" : "mib";
     store.set("mib-aud", v);
     state.idx = Math.max(0, visible().indexOf(id));
     state.menu = false;
@@ -1129,6 +1278,7 @@
     if ($("#wf")) { $("#wf").innerHTML = waterfall(); $("#calc-out").innerHTML = calcOut(); }
     if ($("#cmp")) { $("#cmp").innerHTML = compareChart(); $("#counting").innerHTML = counting(); }
     if ($("#h2h-diff")) updateH2h();
+    if ($("#ib-wf")) updateIb();
   }
   function updateH2h() {
     const x = h2hRes();
@@ -1252,8 +1402,7 @@
   document.addEventListener("click", (e) => {
     const cp = e.target.closest("[data-copy]");
     if (cp) copyText(cp.dataset.copy); // link vẫn mở tab mới như bình thường
-    const rg = e.target.closest("[data-reg]");
-    if (rg) unlockCompare(!!rg.closest("[data-gate]")); // link vẫn mở tab mới như bình thường
+    const rg = e.target.closest("[data-reg]"); // link đăng ký vẫn mở tab mới như bình thường
     const a = e.target.closest("[data-act]");
     if (a && a.dataset.act === "menu") { state.menu = !state.menu; state.regMenu = false; refreshHeader(); return; }
     if (a && a.dataset.act === "reg-menu") { state.regMenu = !state.regMenu; state.menu = false; refreshHeader(); return; }
@@ -1265,6 +1414,7 @@
         case "lang": setLang(v); break;
         case "aud": setAud(v); break;
         case "present": togglePresent(); break;
+        case "relock": relock(); break;
         case "prev": prev(); break;
         case "next": next(); break;
         case "banner": state.banner = false; $(".banner").remove(); break;
@@ -1275,10 +1425,6 @@
           break;
         case "xp-filter":
           state.extra.filter = v;
-          refresh("km-khac");
-          break;
-        case "xp-private":
-          state.extra.showPrivate = !state.extra.showPrivate;
           refresh("km-khac");
           break;
         case "cmpview":
@@ -1295,7 +1441,6 @@
           break;
         case "xp-jump":
           state.extra.filter = v === "private" ? "marketing" : v;
-          if (v === "private") state.extra.showPrivate = true;
           refresh("km-khac");
           if (state.present) { e.preventDefault(); go(visible().indexOf("km-khac")); }
           break;
@@ -1322,6 +1467,14 @@
           state.addons[v] = !state.addons[v];
           updateAddons();
           break;
+        case "m5mode": state.m5mode = v; refresh("m5"); break;
+        case "ib-addon":
+          if (v === "ecn" && !ibEcnUsable()) break; // ECN chỉ dành cho Edge và khi Q4 còn hiệu lực
+          state.ibAdd[v] = !state.ibAdd[v];
+          updateIb();
+          break;
+        case "ib-promo": toggleIbPromo(v); break;
+        case "ib-reset": state.ibc = ibDefaults(); state.ibAdd = { ecn: false, swap: false }; state.ibp = {}; refresh("m5"); break;
         case "promo": state.promo = v; refresh("m2"); break;
         case "tiers-edit": state.tierEdit = !state.tierEdit; refresh("m2"); break;
         case "tier-add": case "tier-del": case "tier-reset": tierAction(a.dataset.act, v); break;
@@ -1355,15 +1508,17 @@
     if (g && state.present) { e.preventDefault(); go(visible().indexOf(g.dataset.go)); }
   });
 
-  // Bấm chuột giữa vào link đăng ký (mở tab nền) cũng tính là đã bấm
-  document.addEventListener("auxclick", (e) => {
-    const rg = e.button === 1 && e.target.closest("[data-reg]");
-    if (rg) unlockCompare(!!rg.closest("[data-gate]"));
-  });
-
   document.addEventListener("input", (e) => {
     const t = e.target, d = t.dataset;
-    if (d.calc) {
+    if (d.code) {
+      state.code = t.value;
+      document.querySelectorAll("[data-code]").forEach((i) => { if (i !== t) i.value = state.code; });
+    } else if (d.ibc) {
+      const k = d.ibc;
+      state.ibc[k] = k === "account" ? t.value : ["clients", "active", "joined"].includes(k) ? Math.max(0, Math.floor(+t.value || 0)) : Math.max(0, +t.value || 0);
+      if (k === "account" && !ibEcnUsable()) state.ibAdd.ecn = false;
+      updateIb();
+    } else if (d.calc) {
       const k = d.calc;
       state.calc[k] = k === "account" ? t.value : Math.max(0, +t.value || 0);
       if (k === "share") state.calc.share = Math.min(100, state.calc.share);
@@ -1415,7 +1570,9 @@
     updateCalc();
   });
   document.addEventListener("submit", (e) => {
-    if (!(e.target && e.target.dataset && e.target.dataset.form === "contact")) return;
+    const form = e.target && e.target.dataset && e.target.dataset.form;
+    if (form === "unlock") { e.preventDefault(); tryUnlock(); return; }
+    if (form !== "contact") return;
     e.preventDefault();
     sendContact();
   });
@@ -1467,7 +1624,9 @@
   } else if (si >= 0) {
     document.getElementById(visible()[si]).scrollIntoView({ behavior: "instant", block: "start" });
   }
+  // Đã nhập mã ở lần trước (khóa nhớ trong trình duyệt): mở lại các slide, không phải nhập lại
+  if (Lk && window.PP_LOCKED) Lk.restore().then((data) => { if (data) { applyLocked(data); render(); } }).catch(() => {});
 
   // Móc cho test (chỉ bật khi test đặt window.__MIB_TEST__ trước khi nạp app.js)
-  if (window.__MIB_TEST__) Object.assign(window.__MIB_TEST__, { state, html: (id) => R[id](), header, visible });
+  if (window.__MIB_TEST__) Object.assign(window.__MIB_TEST__, { state, html: (id) => R[id](), header, visible, unlock: applyLocked, relock, isLocked });
 })();

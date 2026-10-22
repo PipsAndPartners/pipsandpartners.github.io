@@ -29,7 +29,7 @@ test("validate: phone và email bắt buộc, tên và ghi chú tùy chọn", ()
 });
 
 test("validate: số điện thoại", () => {
-  for (const p of ["+84 90 123 4567", "0901234567", "(090) 123-4567", "+61410678015", "090.123.4567"]) assert.equal(K.validate({ phone: p, email: "a@b.co" }).errors.phone, undefined, p);
+  for (const p of ["+84 90 123 4567", "0901234567", "(090) 123-4567", "+61400000000", "090.123.4567"]) assert.equal(K.validate({ phone: p, email: "a@b.co" }).errors.phone, undefined, p);
   for (const p of ["12345", "abc", "09012345678901234", "+", "0901 abc 4567"]) assert.equal(K.validate({ phone: p, email: "a@b.co" }).errors.phone, "invalid", p);
 });
 

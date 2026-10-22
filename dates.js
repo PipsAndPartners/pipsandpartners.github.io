@@ -109,11 +109,11 @@
   }
 
   // Trạng thái một ưu đãi theo ngày hôm nay (p = { from, until }, cả hai ngày đều tính):
-  // "upcoming" chưa bắt đầu, "active" đang chạy, "ended" đã hết. daysLeft = số ngày tới hạn (0 = hôm nay là ngày cuối).
+  // "upcoming" chưa bắt đầu, "active" đang chạy, "closed" đã đóng đăng ký (qua regUntil) nhưng còn hạn hoàn tất, "ended" đã hết. daysLeft = số ngày tới hạn (0 = hôm nay là ngày cuối).
   // level: "urgent" (< 7 ngày), "soon" (< 30 ngày), "ok".
   function promoStatus(p, today) {
     const t = toMs(today), until = toMs(p.until);
-    const state = t > until ? "ended" : p.from && t < toMs(p.from) ? "upcoming" : "active";
+    const state = t > until ? "ended" : p.from && t < toMs(p.from) ? "upcoming" : p.regUntil && t > toMs(p.regUntil) ? "closed" : "active";
     const daysLeft = Math.round((until - t) / DAY);
     return { state, daysLeft, level: daysLeft < 7 ? "urgent" : daysLeft < 30 ? "soon" : "ok" };
   }

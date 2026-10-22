@@ -856,7 +856,19 @@ html { scroll-padding-top: 5.5rem; }
   .xp-tags { grid-column: 2; justify-content: flex-start; }
   .xp-body { padding-left: 0; }
 }
-@media print { .xp--private, .xp-private-warn, .xp-priv-btn, .xp-bar .seg { display: none !important; } }
+.xp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .9rem; }
+.xp-card { display: grid; gap: .65rem; align-content: start; padding: 1rem; background: #fff; border: 1px solid var(--line); border-radius: var(--r); text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.xp-card:hover, .xp-card:focus-visible { transform: translateY(-2px); border-color: var(--blue); box-shadow: 0 8px 20px rgba(11, 31, 77, .1); }
+.xp-card .xp-ic { width: 2.25rem; height: 2.25rem; }
+.xp-card .xp-name b { font-size: 1rem; color: var(--navy); }
+.xp-card .xp-name small { font-size: .88rem; }
+.xp-card .xp-tags { justify-content: flex-start; }
+.xp-card--private .xp-ic { background: #FDECEA; color: #A12A1E; }
+.xp-go { align-self: end; color: var(--blue); font-weight: 700; font-size: .85rem; display: inline-flex; gap: .3rem; align-items: center; }
+.xp-go .ic { width: .9em; height: .9em; }
+.xp-tag--closed { background: #EEF1F6; color: #4A5D7A; }
+.xp-private-hint { margin-bottom: .9rem; }
+@media print { .xp-card--private, .xp-private-warn, .xp-private-hint, .xp-bar .seg, .xp-bar .btn { display: none !important; } }
 
 /* ---------- slide So sánh: cách "Đối đầu" (2 vòng tròn, khung nhập riêng) ---------- */
 .h2h { display: grid; grid-template-columns: minmax(0, 1fr) 9.5rem minmax(0, 1fr); gap: 1.25rem; align-items: start; }
@@ -941,22 +953,22 @@ html { scroll-padding-top: 5.5rem; }
 .reg-opt .reg-ext { margin-left: auto; color: var(--muted); }
 @media (max-width: 720px) { .top-ctl .reg-chev { display: none; } }
 
-/* ---------- slide So sánh: khóa tới khi bấm đăng ký ---------- */
-.cmp-lock { position: relative; min-height: 30rem; }
-.cmp-lock-preview { filter: blur(7px) saturate(.7); opacity: .5; pointer-events: none; user-select: none; max-height: 36rem; overflow: hidden; -webkit-mask-image: linear-gradient(#000 55%, transparent); mask-image: linear-gradient(#000 55%, transparent); }
-.cmp-gate { position: absolute; inset: 0; z-index: 2; display: flex; justify-content: center; align-items: flex-start; padding-top: 3.5rem; }
-.cmp-gate-card { background: #fff; border: 1px solid var(--line); border-radius: var(--r); box-shadow: 0 18px 48px rgba(11, 31, 77, .18); padding: 1.75rem 1.5rem; max-width: 36rem; width: 100%; text-align: center; display: grid; gap: .75rem; justify-items: center; }
-.cmp-gate-card h3 { margin: 0; font-size: 1.35rem; color: var(--navy); }
-.cmp-gate-card p { color: var(--muted); font-size: .95rem; }
-.cmp-gate-ic { width: 3rem; height: 3rem; border-radius: 50%; display: grid; place-items: center; background: #EEF4FD; color: var(--blue); }
-.cmp-gate-ic .ic { width: 1.5rem; height: 1.5rem; }
-.cmp-gate .reg-pair { justify-content: center; margin-top: .25rem; }
-@media (max-width: 640px) {
-  .cmp-gate { padding-top: 1rem; }
-  .cmp-gate-card { padding: 1.25rem 1rem; }
-  .cmp-gate .reg-pair .btn { width: 100%; justify-content: center; }
-}
-@media print { .cmp-lock-preview { display: none; } .cmp-gate { position: static; } .cmp-lock { min-height: 0; } }
+/* ---------- khóa bằng mã truy cập (slide KM, Ví dụ, So sánh) ---------- */
+.lock-card { max-width: 40rem; margin: 0 auto; padding: 2rem 1.5rem; display: grid; gap: .85rem; justify-items: center; text-align: center; box-shadow: 0 18px 48px rgba(11, 31, 77, .1); }
+.lock-card h3 { margin: 0; font-size: 1.35rem; color: var(--navy); }
+.lock-card > p { margin: 0; color: var(--muted); font-size: .95rem; max-width: 32rem; }
+.lock-ic { width: 3.25rem; height: 3.25rem; border-radius: 50%; display: grid; place-items: center; background: #EEF4FD; color: var(--blue); }
+.lock-ic .ic { width: 1.6rem; height: 1.6rem; }
+.lock-form { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; justify-content: center; width: 100%; max-width: 30rem; text-align: left; }
+.lock-form .field { flex: 1 1 15rem; }
+.lock-form input { letter-spacing: .06em; text-transform: uppercase; }
+.lock-msg { margin: 0; min-height: 1.3em; color: #A12A1E; font-weight: 600; font-size: .9rem; }
+.lock-contact { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; justify-content: center; color: var(--muted); font-size: .9rem; }
+.lock-contact a.btn { text-decoration: none; }
+.menu-lock { width: .95em; height: .95em; margin-left: auto; opacity: .55; }
+.menu-foot .btn { margin-left: auto; }
+@media (max-width: 640px) { .lock-card { padding: 1.5rem 1rem; } .lock-form .btn { width: 100%; justify-content: center; } }
+@media print { .lock-form, .lock-contact { display: none; } }
 
 /* Điện thoại: header gọn một hàng để nút Register luôn nằm trong màn hình (trước đây tràn ngang ở 375px) */
 @media (max-width: 480px) {
@@ -966,3 +978,11 @@ html { scroll-padding-top: 5.5rem; }
   .menu-label { max-width: none; min-width: 0; }
   .top-ctl .seg button { padding: .3rem .4rem; }
 }
+
+/* ---------- slide Ví dụ, chế độ IB mới: khung ưu đãi khác như add-on ---------- */
+.ibp { margin-top: 1.25rem; display: grid; gap: .5rem; align-content: start; }
+.ibp h3 { margin: 0; display: flex; align-items: center; gap: .5rem; font-size: 1.1rem; color: var(--navy); }
+.ibp .ecn-row { margin: 0; }
+.ibp-h { margin: .75rem 0 0; padding-top: .6rem; border-top: 1px solid var(--line); font-size: .75rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ibp-total { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; margin-top: .25rem; padding: .65rem .85rem; border-radius: 10px; background: #EEF4FD; color: var(--navy); }
+.ibp-total small { color: var(--muted); font-weight: 600; }

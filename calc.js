@@ -48,6 +48,81 @@
     };
   }
 
+  // KM tháng IB chỉ tính khi IB có đủ khách: ≥ 5 khách trực tiếp được kích hoạt, trong đó ≥ 3 khách hoạt động.
+  const IB_MIN_CLIENTS = 5, IB_MIN_ACTIVE = 3;
+
+  // Một tháng của IB mới hoàn toàn (không có Sub-IB, chỉ khách trực tiếp): IB giữ 100% rebate + KM tháng IB (nếu đủ khách và đạt bậc).
+  // tiers = [{ deposit, lots, reward }]. Add-on như mibMonth: ecn (chỉ Edge, tính trên net deposit khách trực tiếp), swap.
+  // p = { account, lotsFx, lotsGold, deposit, clients, active, addons, swapFee, swapNd }.
+  // p.ticket (số USD, tùy chọn): giá trị vé IB nhận thay cho KM tháng IB (hai thứ loại trừ nhau, chọn một).
+  function ibMonth(p, accounts, tiers, ecn, swapTiers) {
+    const acc = accounts.find((a) => a.name === p.account) || accounts[0];
+    const rebate = p.lotsFx * acc.fx + p.lotsGold * acc.gold;
+    const lots = p.lotsFx + p.lotsGold;
+    const eligible = p.clients >= IB_MIN_CLIENTS && p.active >= IB_MIN_ACTIVE;
+    const tier = mibTier(tiers, p.deposit, lots);
+    const useTicket = Number.isFinite(p.ticket) && p.ticket > 0;
+    const bonus = !useTicket && eligible && tier ? tier.reward : 0;
+    const ticket = useTicket ? p.ticket : 0;
+    const on = p.addons || {};
+    const ecnApplies = !!acc.q4;
+    const ecnAdd = on.ecn && ecnApplies && ecn ? ecnMonth(p, ecn).add : 0;
+    const swap = on.swap ? swapRebate(p.swapFee, p.swapNd, swapTiers) : { weekly: 0, monthly: 0, pct: 0, total: 0 };
+    const next = tiers[tier ? tiers.indexOf(tier) + 1 : 0] || null;
+    const base = rebate + bonus + ticket;
+    return {
+      rebate, lots, eligible, tier, next, bonus, ticket, base, ecn: ecnAdd, ecnApplies, swap,
+      total: base + ecnAdd + swap.total,
+      needClients: Math.max(0, IB_MIN_CLIENTS - p.clients), needActive: Math.max(0, IB_MIN_ACTIVE - p.active),
+      needLots: next ? Math.max(0, next.lots - lots) : 0,
+      needDeposit: next ? Math.max(0, next.deposit - p.deposit) : 0,
+      gross: p.deposit + rebate,
+    };
+  }
+
+  // Một ưu đãi khác như add-on của máy tính IB. calc = trường `calc` của ưu đãi:
+  //   kind "client" = khách của IB nhận (không cộng vào thu nhập IB); kind "ib" = IB nhận (vé).
+  //   type: credit (% khoản nạp đầu, trần cap, nạp tối thiểu minFtd; credit chỉ dùng làm margin) · cashback (như credit nhưng là tiền) ·
+  //         cash (số tiền cố định usd) · table (bảng bậc [net deposit, lot, quà, tiền 70%] của ưu đãi, theo net deposit và lot MỖI KHÁCH) ·
+  //         points (pts điểm, đổi USD theo bảng quy đổi) · draw (bốc thăm 1 giải / perN khách, không quy ra tiền) · gift (quà/vé, không quy ra tiền) ·
+  //         tickets (kind ib: bậc [{ deposit, lots, value }] theo net deposit và lot của khách trực tiếp, cần ≥ minActive khách hoạt động).
+  // c = { n (số khách tham gia), ftd (nạp đầu mỗi khách), deposit, lots (mỗi khách), ibDeposit, ibLots, active, points }.
+  // Trả { kind, cur, per, total, ok, ... }: cur ∈ credit | cash | points | draw | gift | ticket; total = USD (0 với draw/gift).
+  function promoAddon(calc, c) {
+    const n = Math.max(0, Math.floor(c.n || 0)), ftd = c.ftd || 0;
+    const kind = calc.kind || "client";
+    switch (calc.type) {
+      case "credit": case "cashback": {
+        const ok = ftd >= (calc.minFtd || 0);
+        const per = ok ? Math.min(calc.cap, (ftd * calc.pct) / 100) : 0;
+        return { kind, cur: calc.type === "credit" ? "credit" : "cash", per, total: per * n, ok };
+      }
+      case "cash": {
+        const ok = ftd >= (calc.minFtd || 0);
+        const per = ok ? calc.usd : 0;
+        return { kind, cur: "cash", per, total: per * n, ok };
+      }
+      case "table": {
+        const hit = mibTier((calc.rows || []).map(([deposit, lots, item, cash]) => ({ deposit, lots, item, cash })), c.deposit || 0, c.lots || 0);
+        const per = hit ? hit.cash : 0;
+        return { kind, cur: "cash", per, total: per * n, ok: !!hit, item: hit ? hit.item : null };
+      }
+      case "points": {
+        const pts = c.points, ref = pts && pts.cashback.find((x) => x.usd === pts.refUsd);
+        const per = ref ? (calc.pts * ref.usd) / ref.pts : 0;
+        return { kind, cur: "points", pts: calc.pts, per, total: per * n, ok: true };
+      }
+      case "draw": return { kind, cur: "draw", per: 0, total: 0, ok: true, prizes: calc.perN ? n / calc.perN : 0 };
+      case "gift": return { kind, cur: "gift", per: 0, total: 0, ok: true };
+      case "tickets": {
+        const rows = (calc.tiers || []).map((t) => ({ ...t })), hit = mibTier(rows, c.ibDeposit || 0, c.ibLots || 0);
+        const ok = !!hit && (c.active || 0) >= (calc.minActive || 0);
+        return { kind: "ib", cur: "ticket", per: 0, total: 0, value: ok ? hit.value : 0, ok, tier: hit };
+      }
+      default: return { kind, cur: "gift", per: 0, total: 0, ok: false };
+    }
+  }
+
   // Bậc KM do người dùng sửa: ép về số hợp lệ, bỏ dòng hỏng (đếm trong dropped), sắp tăng dần theo net deposit,
   // trùng net deposit thì giữ dòng sau, tối đa MAX_TIERS dòng. key = tên trường thưởng ("mib" hoặc "reward").
   function cleanTiers(rows, key) {
@@ -101,7 +176,7 @@
     };
   }
 
-  // Rebate USD/lot của một nhóm tài khoản: theo lot (fx, gold), hoặc theo % chi phí khách (pct, như Vantage).
+  // Rebate USD/lot của một nhóm tài khoản: theo lot (fx, gold), hoặc theo % chi phí khách (pct, như một số sàn).
   // null nếu chưa có số liệu.
   function rebateRate(a) {
     if (a.pct != null) return { fx: (a.costFx * a.pct) / 100, gold: (a.costGold * a.pct) / 100 };
@@ -181,7 +256,7 @@
     };
   }
 
-  const api = { mibTier, mibMonth, swapRebate, cleanTiers, tierWarnings, ecnTier, ecnRate, ecnMonth, rebateRate, compareMonth, compareAll, headToHead, donutArcs, pointsPerLot, clientBack };
+  const api = { IB_MIN_CLIENTS, IB_MIN_ACTIVE, mibTier, mibMonth, ibMonth, promoAddon, swapRebate, cleanTiers, tierWarnings, ecnTier, ecnRate, ecnMonth, rebateRate, compareMonth, compareAll, headToHead, donutArcs, pointsPerLot, clientBack };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.MIBCalc = api;
 })(this);

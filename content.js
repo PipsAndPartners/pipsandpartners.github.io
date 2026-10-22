@@ -4,9 +4,11 @@
  *        và "TMGM 2026 Q4 ECN/EDGE IB Special Promotion" (EN + 中繁).
  *
  * Cập nhật hàng tháng (khi TMGM ra KM mới):
- *   1. Sửa meta.period, meta.validUntil và các bảng số bên dưới (mibTiers, swapTiers, ecn, ib...).
+ *   1. Sửa meta.period, meta.validUntil và các bảng số công khai bên dưới (swapTiers, ecn...).
+ *      Số KM MIB/IB, so sánh sàn, slide Ví dụ/So sánh/KM nằm trong private/locked-source.json (không đẩy lên GitHub).
+ *      Sửa file đó rồi chạy: node scripts/lock.mjs  → tạo lại locked.js (đã mã hóa, đẩy file này).
  *   2. Sửa các câu có số trong chuỗi T(vi, en, zh) nếu số đổi (tìm "USD" / "美元").
- *   3. Chạy: node --test "tests/*.test.js"
+ *   3. Chạy: node --test "tests/*.test.js" "private/tests/*.test.js"
  *   4. Mở lại index.html. Banner "hết hạn" tự tắt khi hôm nay <= meta.validUntil.
  *
  * Mỗi chuỗi hiển thị là T(vi, en, zh). Chuỗi khác nhau theo đối tượng dùng { mib: T(...), ib: T(...) }.
@@ -14,13 +16,15 @@
 (function () {
   const T = (vi, en, zh) => ({ vi, en, zh });
 
-  const MIB5 = [
-    { deposit: 50000, lots: 375, mib: 1300, ibCombined: 900 },
-    { deposit: 100000, lots: 750, mib: 3000, ibCombined: 2000 },
-    { deposit: 170000, lots: 1200, mib: 6000, ibCombined: 3800 },
-    { deposit: 340000, lots: 2400, mib: 12900, ibCombined: 8500 },
-    { deposit: 500000, lots: 3300, mib: 20000, ibCombined: 15000 },
-  ];
+  // Slide cần mã truy cập: nội dung thật nằm trong locked.js (đã mã hóa), ở đây chỉ còn nhãn và tiêu đề chung.
+  const LOCK_TITLE = T("Nội dung dành riêng cho đối tác", "Partner-only content", "合作夥伴專屬內容");
+  const LOCK_NOTES = T(
+    "Slide này cần mã truy cập. Chưa có mã thì hướng dẫn đối tác liên hệ để nhận.",
+    "This slide needs an access code. If the partner has none yet, point them to the contact buttons.",
+    "此頁需要存取碼。若合作夥伴尚未取得，請引導他們使用聯絡按鈕。"
+  );
+  const locked = (part, label, hidden) => ({ locked: !hidden, hidden: !!hidden, part, label, title: LOCK_TITLE, notes: LOCK_NOTES });
+
 
   window.MIB = {
     meta: {
@@ -37,14 +41,16 @@
       contactEmail: "precy.vuong@tmgm.com",
       // Quy tắc "gộp nhánh, lot +50%" bị đánh dấu Internal: chỉ bật khi TMGM đã cho phép chia sẻ với đối tác.
       showInternal: false,
+      // Trang ưu đãi đầy đủ (slide Ưu đãi khác dẫn sang đây)
+      promotionsUrl: "promotions/",
     },
 
     presenter: {
       name: "Precy Guo",
-      title: T("Account Manager · TMGM", "Account Manager · TMGM", "客戶經理 · TMGM"),
+      title: T("Business Development · TMGM", "Business Development · TMGM", "業務拓展 · TMGM"),
       telegram: "guowang26",
-      whatsapp: "+61 410 678 015",
-      whatsappLink: "61410678015",
+      whatsapp: "+61 431 840 947",
+      whatsappLink: "61431840947",
     },
 
     ui: {
@@ -61,13 +67,6 @@
         btn: T("Đăng ký · {r}", "Register · {r}", "註冊 · {r}"),
         suggested: T("Gợi ý", "Suggested", "建議"),
         newTab: T("mở tab mới", "opens in a new tab", "於新分頁開啟"),
-        gateTitle: T("Đăng ký để mở công cụ so sánh", "Register to unlock the comparison", "註冊後即可使用比較工具"),
-        gateText: T(
-          "Bấm một trong hai nút để mở trang đăng ký TMGM ở tab mới. Công cụ so sánh mở ngay sau đó và được ghi nhớ trên trình duyệt này.",
-          "Click either button to open the TMGM sign-up page in a new tab. The comparison unlocks right away and stays unlocked in this browser.",
-          "點擊任一按鈕，即在新分頁開啟 TMGM 註冊頁。比較工具會立即開啟，並在此瀏覽器中保持開啟。"
-        ),
-        unlocked: T("Đã mở công cụ so sánh ở slide So sánh", "Comparison unlocked on the Compare slide", "「比較」頁的比較工具已開啟"),
       },
       menu: T("Danh sách slide", "All slides", "全部頁面"),
       verifyOn: T("Verify trên {r}", "Verify on {r}", "前往 {r} 查核"),
@@ -93,6 +92,34 @@
           "已開啟電子郵件程式並帶入寄給 {to} 的草稿，請在郵件程式中按「傳送」完成。"
         ),
         fallback: T("Không thấy email mở ra? Gửi thông tin trực tiếp tới {to}.", "No email window? Write to {to} directly.", "沒有開啟郵件視窗？請直接寄信至 {to}。"),
+      },
+      lock: {
+        title: LOCK_TITLE,
+        text: T(
+          "Bảng thưởng KM, máy tính thu nhập và so sánh sàn chỉ mở cho đối tác. Liên hệ để nhận mã truy cập.",
+          "The promo tiers, income calculator and broker comparison are for partners only. Get in touch for an access code.",
+          "活動獎金級別、收入計算器與平台比較僅供合作夥伴使用。請聯絡取得存取碼。"
+        ),
+        ask: T("Chưa có mã? Liên hệ", "No code yet? Contact", "還沒有存取碼？請聯絡"),
+        mailSubject: T("Xin mã truy cập trang đối tác TMGM", "Access code request: TMGM partnership page", "申請 TMGM 合作夥伴頁面存取碼"),
+        mailBody: T(
+          "Chào {name}, mình muốn nhận mã truy cập trang hợp tác MIB/IB của TMGM.",
+          "Hi {name}, I'd like the access code for the TMGM MIB/IB partnership page.",
+          "{name} 您好，我想取得 TMGM MIB/IB 合作夥伴頁面的存取碼。"
+        ),
+        codeLabel: T("Mã truy cập", "Access code", "存取碼"),
+        placeholder: T("PP-XXXX-XXXX-XXXX-XXXX", "PP-XXXX-XXXX-XXXX-XXXX", "PP-XXXX-XXXX-XXXX-XXXX"),
+        submit: T("Mở khóa", "Unlock", "解鎖"),
+        checking: T("Đang kiểm tra…", "Checking…", "驗證中…"),
+        wrong: T("Mã chưa đúng. Kiểm tra lại hoặc liên hệ để nhận mã.", "That code isn't right. Check it or get in touch for a code.", "存取碼不正確。請再確認，或聯絡取得存取碼。"),
+        unsupported: T(
+          "Trình duyệt này chưa hỗ trợ mở khóa (cần Chrome, Edge, Safari hoặc Firefox bản mới, mở qua https).",
+          "This browser can't unlock the content (use a current Chrome, Edge, Safari or Firefox over https).",
+          "此瀏覽器無法解鎖內容（請使用新版 Chrome、Edge、Safari 或 Firefox，並以 https 開啟）。"
+        ),
+        unlocked: T("Đã mở khóa nội dung dành cho đối tác", "Partner content unlocked", "已解鎖合作夥伴內容"),
+        relock: T("Khóa lại", "Lock again", "重新鎖定"),
+        badge: T("Cần mã", "Code needed", "需存取碼"),
       },
       audience: T("Đối tượng", "Audience", "對象"),
       language: T("Ngôn ngữ", "Language", "語言"),
@@ -142,7 +169,7 @@
     },
 
     support: [
-      { icon: "headset", label: T("AM riêng", "Dedicated AM", "專屬客戶經理") },
+      { icon: "headset", label: T("BD riêng", "Dedicated BD", "專屬 BD") },
       { icon: "file", label: T("Marketing tiếng Việt", "Vietnamese marketing kit", "越南語行銷素材") },
       { icon: "monitor", label: T("Hội thảo trực tuyến hàng tháng", "Monthly webinars", "每月線上研討會") },
       { icon: "gift", label: T("Ưu đãi cho khách", "Client offers", "客戶優惠") },
@@ -182,24 +209,6 @@
       example: { deposit: 150000, lotsFx: 1000, lotsGold: 800 },
     },
 
-    // KM đặc biệt MIB (T10/2026, PDF "October VN MIB Special Promotions"; số giống T9) so với KM IB gộp nhánh (lot +50%) — cùng ngưỡng net deposit và lot.
-    // Người dùng sửa được bậc trên web (nút "Tùy chỉnh bậc"); đây là bộ mặc định.
-    mibTiers: MIB5,
-    // Bộ bậc có sẵn để chọn nhanh: 5 bậc theo PDF, hoặc 7 bậc theo file khảo sát đối thủ (thêm 2 bậc nhỏ 17K và 34K).
-    mibTierPresets: {
-      pdf5: MIB5,
-      research7: [{ deposit: 17000, lots: 140, mib: 300 }, { deposit: 34000, lots: 255, mib: 700 }, ...MIB5],
-    },
-    // KM tháng IB (T10/2026, PDF "October VN IB Promotions"; số giống T9; nộp đơn qua AM trước ngày 7 tháng sau): chỉ tính khách trực tiếp; cần ≥ 5 khách kích hoạt, trong đó ≥ 3 khách hoạt động
-    ibTiers: [
-      { deposit: 17000, lots: 85, reward: 260 },
-      { deposit: 34000, lots: 170, reward: 580 },
-      { deposit: 50000, lots: 250, reward: 900 },
-      { deposit: 100000, lots: 500, reward: 2000 },
-      { deposit: 170000, lots: 800, reward: 3800 },
-      { deposit: 340000, lots: 1600, reward: 8500 },
-      { deposit: 500000, lots: 2200, reward: 15000 },
-    ],
 
     // Hoàn Swap hàng tháng (chính sách IB): ngưỡng net deposit của khách trực tiếp
     swapTiers: [
@@ -208,15 +217,21 @@
       { pct: 50, ib: 30000 },
     ],
 
+    // Số KM MIB/IB và dữ liệu so sánh sàn nằm trong locked.js (mã hóa), nạp vào đây khi nhập đúng mã.
+    mibTiers: [],
+    mibTierPresets: {},
+    ibTiers: [],
+    competitors: { brokers: [] },
+
     // Ví dụ M5 (share = % rebate MIB chia cho Sub-IB)
     example: { lotsFx: 1000, lotsGold: 1400, account: "Prime", share: 70, deposit: 340000, subIBs: 5 },
 
     payouts: [
       { key: "base", icon: "coins", name: T("Rebate cơ bản", "Base rebate", "基本返傭"), how: T("Trả mỗi ngày làm việc · lệnh thứ Sáu về thứ Hai", "Paid every working day · Friday trades arrive Monday", "每個工作日發放 · 週五交易於週一到帳"), when: T("T+1, không tính T7–CN", "T+1, excluding weekends", "T+1，不含週末") },
-      { key: "wed", icon: "moon", name: T("Hoàn Swap tuần", "Weekly swap rebate", "每週隔夜利息返還"), how: T("AM đăng ký, bộ phận BO xử lý", "AM registers, back office processes", "AM 申請，後台處理"), when: T("Mỗi thứ Tư", "Every Wednesday", "每週三") },
-      { key: "day13", icon: "calendar", name: T("Hoàn Swap tháng", "Monthly swap rebate", "每月隔夜利息返還"), how: T("AM đăng ký", "AM registers", "AM 申請"), when: T("Trước ngày 14 hàng tháng", "Before the 14th of each month", "每月 14 日前") },
+      { key: "wed", icon: "moon", name: T("Hoàn Swap tuần", "Weekly swap rebate", "每週隔夜利息返還"), how: T("BD đăng ký, bộ phận BO xử lý", "BD registers, back office processes", "BD 申請，後台處理"), when: T("Mỗi thứ Tư", "Every Wednesday", "每週三") },
+      { key: "day13", icon: "calendar", name: T("Hoàn Swap tháng", "Monthly swap rebate", "每月隔夜利息返還"), how: T("BD đăng ký", "BD registers", "BD 申請"), when: T("Trước ngày 14 hàng tháng", "Before the 14th of each month", "每月 14 日前") },
       { key: "bd5", icon: "zap", name: T("Tăng rebate ECN Q4", "Q4 ECN rebate boost", "ECN Q4 返傭加碼"), how: T("Tự động, không cần đăng ký", "Automatic, no sign-up", "自動發放，無需申請"), when: T("5 ngày làm việc đầu tháng", "First 5 working days of the month", "每月前 5 個工作日") },
-      { key: "bonus", icon: "trophy", name: T("Thưởng tháng MIB/IB", "MIB/IB monthly bonus", "MIB/IB 月度獎金"), how: T("Nộp đơn qua AM", "Claim via your AM", "透過 AM 申請"), when: T("Trong 14 ngày làm việc sau khi duyệt", "Within 14 working days of approval", "審核通過後 14 個工作日內") },
+      { key: "bonus", icon: "trophy", name: T("Thưởng tháng MIB/IB", "MIB/IB monthly bonus", "MIB/IB 月度獎金"), how: T("Nộp đơn qua BD", "Claim via your BD", "透過 BD 申請"), when: T("Trong 14 ngày làm việc sau khi duyệt", "Within 14 working days of approval", "審核通過後 14 個工作日內") },
       { key: "gift", icon: "gift", name: T("Ưu đãi cho khách: Cashback Q4 + Points", "Client offers: Q4 cashback + Points", "客戶優惠：Q4 現金回贈 + 點數"), how: T("Khách tự đổi trên Portal", "Clients redeem on the Portal", "客戶在 Portal 自行兌換"), when: T("Cashback: ngay khi đổi · Points: về ví hôm sau", "Cashback: as soon as redeemed · Points: in the wallet next day", "現金回贈：兌換即入帳 · 點數：次日入點數錢包") },
     ],
 
@@ -244,259 +259,19 @@
       ],
       defaults: { deposit: 10000, lots: 170 },
     },
-    // ---------- Ưu đãi khác (slide "km-khac"): ưu đãi nhỏ và marketing, áp dụng VN, gập mặc định ----------
-    // Nguồn: TMGM Sales Zendesk, Weekly Update 28/09–04/10/2026, PDF từng chương trình (kiểm tra 09/10/2026).
-    // group: "small" (lợi ích bằng tiền nhưng hẹp/một lần) | "marketing" (quà, bốc thăm, vé).
-    // share: "private" = chỉ chia sẻ riêng (không đăng mạng xã hội): ẩn mặc định, không in.
-    // from/until (YYYY-MM-DD, giờ MT4/MT5): hết "until" thì tự ẩn. Không mục nào được cộng vào máy tính/biểu đồ.
-    extraPromos: [
-      {
-        key: "halloween", group: "small", share: "public", icon: "user-plus", from: "2026-10-05", until: "2026-11-05",
-        url: "https://lnd.tmgm-apac.com/en/halloween",
-        name: T("Halloween Quest", "Halloween Quest", "萬聖節任務"),
-        value: T("Credit 30% FTD (tối đa 200 USD); đoán đúng sản phẩm bí ẩn: 100% (tối đa 1.000 USD)", "30% credit on the FTD (max USD 200); 100% for picking the Mystery Product (max USD 1,000)", "首入金 30% 贈金（最高 200 美元）；猜中神秘產品 100%（最高 1,000 美元）"),
-        seg: T("Khách mới", "New clients", "新客戶"),
-        rules: [
-          T("FTD ≥ 50 USD trong kỳ và giao dịch ≥ 0,01 lot (trừ cổ phiếu); sản phẩm giao dịch đầu tiên quyết định nhiệm vụ", "FTD ≥ USD 50 in the period and trade ≥ 0.01 lot (shares excluded); the first product traded decides the quest", "期間內首次入金 ≥ 50 美元並交易 ≥ 0.01 手（股票除外）；首個交易產品決定任務"),
-          T("Khách chưa có tài khoản đăng ký qua trang chương trình; tài khoản có sẵn nhưng chưa FTD thì nhờ AM", "Clients without an account register via the promotion page; existing accounts without an FTD go through their AM", "未開戶客戶經活動頁註冊；已開戶未首存的客戶請 AM 協助"),
-          T("Cuối kỳ: net deposit ≥ FTD và equity ≥ 30 USD; credit về trước 11/12/2026", "At the end: net deposit ≥ FTD and equity ≥ USD 30; credit lands by 11 Dec 2026", "結束時：淨入金 ≥ 首入金且淨值 ≥ 30 美元；贈金於 2026/12/11 前發放"),
-        ],
-        note: T(
-          "Credit bonus, mỗi khách một lần. Khách từng nhận bất kỳ credit bonus nào (kể cả 50% Credit) không tham gia. T&C đầy đủ gửi sau; xác nhận nước đủ điều kiện với AM.",
-          "Credit bonus, once per client. Clients who've had any credit bonus (including the 50% Credit) can't join. Full T&Cs to follow; confirm country eligibility with your AM.",
-          "贈金，每位客戶限一次。曾領取任何贈金（含 50% 贈金）的客戶不可參加。完整條款稍後公布；請向 AM 確認國家資格。"
-        ),
-      },
-      {
-        key: "credit50", group: "small", share: "public", icon: "coins", from: "2026-10-01", until: "2026-12-31",
-        url: "https://lnd.tmgm.com/en/deposit_bonus",
-        name: T("50% Credit Q4", "Q4 50% Credit", "Q4 50% 贈金"),
-        value: T("Credit 50% khoản nạp mới, tối đa 10.000 USD/tài khoản", "50% credit on new deposits, up to USD 10,000 per account", "新入金 50% 贈金，每個帳戶最高 10,000 美元"),
-        seg: T("Khách mới và cũ", "New and existing", "新舊客戶"),
-        rules: [
-          T("Nạp mới tối thiểu 500 USD; mỗi khoản nạp mới xin credit riêng", "New deposit of at least USD 500; each new deposit is applied for separately", "新入金至少 500 美元；每筆新入金分別申請"),
-          T("Xin qua AM hoặc email support@tmgm.com từ email đã đăng ký (tiêu đề: số tài khoản + “Request 50% bonus”); credit thường về trong 1 ngày làm việc", "Apply via the AM or email support@tmgm.com from the registered address (subject: account number + “Request 50% bonus”); credit usually lands within 1 business day", "透過 AM 或以註冊郵箱發信至 support@tmgm.com 申請（主旨：帳號 +「Request 50% bonus」）；贈金通常 1 個工作日內入帳"),
-          T("Credit chỉ dùng làm margin: không rút, không bù lỗ hay phí; rút tiền hoặc chuyển nội bộ thì credit bị trừ theo tỷ lệ", "Credit is margin only: not withdrawable, doesn't absorb losses or costs; withdrawals or internal transfers reduce it proportionally", "贈金僅作保證金：不可提取，不可抵扣虧損或費用；出金或內部轉帳將按比例扣減"),
-          T("Không áp dụng khách ASIC; tài khoản còn bonus 30% phải dùng hết hoặc xin trên tài khoản khác", "Not for ASIC clients; accounts still holding a 30% bonus must use it up or apply on another account", "不適用 ASIC 客戶；仍有 30% 贈金餘額的帳戶須先用完或改用其他帳戶申請"),
-        ],
-        note: T(
-          "Khách nhận credit này sẽ không tham gia được Halloween Quest. Credit bị xóa nếu tổng equity dưới 30 USD và 30 ngày không nạp, rút hay giao dịch.",
-          "Clients who take this credit can't join Halloween Quest. Credit is cleared if total equity is below USD 30 with no deposit, withdrawal or trade for 30 days.",
-          "領取此贈金的客戶不可參加萬聖節任務。若總淨值低於 30 美元且 30 天內無入金、出金或交易，贈金將被清除。"
-        ),
-      },
-      {
-        key: "gadget", group: "small", share: "public", icon: "gift", from: "2026-10-01", until: "2026-12-31",
-        url: "https://lnd.tmgm.com/en/ultimate-gadget-rewards",
-        name: T("Ultimate Gadget Rewards Q4", "Ultimate Gadget Rewards Q4", "Q4 終極數碼獎賞"),
-        value: T("Apple Watch → MacBook Pro, hoặc nhận 70% giá trị bằng tiền", "Apple Watch → MacBook Pro, or 70% of the value in cash", "Apple Watch → MacBook Pro，或領取 70% 現金價值"),
-        seg: T("Khách mới và cũ", "New and existing", "新舊客戶"),
-        // [net deposit USD, lot chuẩn, quà, encash 70% USD] theo bảng mục 4 PDF Q4
-        table: {
-          cols: [T("Net deposit", "Net deposit", "淨入金"), T("Lot", "Lots", "手數"), T("Quà", "Gadget", "獎品"), T("Hoặc 70%", "Or 70%", "或 70%")],
-          rows: [
-            [10000, 150, "Apple Watch Series 12", 401.1],
-            [20000, 250, "iPad Air 13\"", 825.3],
-            [30000, 350, "iPhone 18 Pro 512 GB", 1206.8],
-            [40000, 450, "iPhone 18 Pro Max 512 GB", 1292.2],
-            [60000, 650, "iPhone Duo 512 GB", 1864.8],
-            [80000, 850, "MacBook Pro 16\" M5 Max", 3285.8],
-          ],
-        },
-        rules: [
-          T("Đăng ký trên Portal → Promotions trước khi nạp; nạp xong trước 31/12/2026, lot được thêm tới 31/01/2027", "Register on Portal → Promotions before depositing; deposits by 31 Dec 2026, lots may continue until 31 Jan 2027", "入金前先在 Portal → 活動頁報名；入金須於 2026/12/31 前完成，手數可延至 2027/1/31"),
-          T("Đạt cả net deposit lẫn lot của bậc; chọn quà hoặc tiền một lần, không đổi sau khi chọn", "Both the net deposit and lots of a tier must be met; gift or cash is chosen once and can't be changed", "須同時達到該級淨入金與手數；獎品或現金僅可選一次，選定後不可更改"),
-          T("Lot: FX, vàng 1:1; chỉ số, dầu, crypto 10:1; cổ phiếu không tính; lệnh giữ ≥ 2 phút; không áp dụng khách ASIC", "Lots: FX, gold 1:1; indices, oil, crypto 10:1; shares excluded; trades held ≥ 2 minutes; not for ASIC clients", "手數：外匯、黃金 1:1；股指、原油、加密貨幣 10:1；股票不計；持倉 ≥ 2 分鐘；不適用 ASIC 客戶"),
-        ],
-        note: T(
-          "T&C ghi 70% của iPhone 18 Pro Max là 1.292,20 USD, trong khi 70% × 1.845 = 1.291,50: chờ TMGM xác nhận.",
-          "The T&C lists USD 1,292.20 as 70% for iPhone 18 Pro Max, while 70% × 1,845 = 1,291.50: awaiting TMGM confirmation.",
-          "條款列出 iPhone 18 Pro Max 的 70% 為 1,292.20 美元，但 70% × 1,845 = 1,291.50：待 TMGM 確認。"
-        ),
-      },
-      {
-        key: "rocket", group: "small", share: "public", icon: "zap", from: "2026-07-26", until: "2026-12-31",
-        name: T("Rocket Your Trading Start", "Rocket Your Trading Start", "Rocket Your Trading Start"),
-        value: T("Cashback 20 USD", "USD 20 cashback", "20 美元現金回贈"),
-        seg: T("Khách mới", "New clients", "新客戶"),
-        rules: [
-          T("Khách chưa từng nạp trước 26/07/2026; bấm Sign in ở Portal → Promotions trước khi nạp", "Clients with no deposit before 26 Jul 2026; click Sign in on Portal → Promotions before depositing", "2026/7/26 前未曾入金的客戶；入金前在 Portal → 活動頁點擊 Sign in"),
-          T("FTD ≥ 50 USD và giao dịch 5 lot BTCUSD (= 0,5 lot chuẩn); chỉ tính BTCUSD, lệnh giữ ≥ 2 phút", "FTD ≥ USD 50 and 5 lots of BTCUSD (= 0.5 standard lots); BTCUSD only, trades held ≥ 2 minutes", "首次入金 ≥ 50 美元並交易 5 手 BTCUSD（= 0.5 標準手）；僅計 BTCUSD，持倉 ≥ 2 分鐘"),
-          T("Không dùng chung nạp hay lot với khuyến mãi khác", "Deposits and lots can't be shared with other promotions", "入金與手數不可與其他活動共用"),
-        ],
-      },
-      {
-        key: "welcomeBack", group: "small", share: "public", icon: "user", from: "2026-09-28", until: "2026-10-31",
-        name: T("Welcome Back", "Welcome Back", "Welcome Back"),
-        value: T("320 points + coupon giảm 20% points", "320 points + a 20% points-discount coupon", "320 點 + 點數 8 折券"),
-        seg: T("Chỉ khách được mời", "Invited clients only", "僅限受邀客戶"),
-        rules: [
-          T("Khách được TMGM mời qua email hoặc thông báo; đăng ký ở Portal → Promotions → Sign Up", "Clients invited by TMGM via email or push notification; sign up on Portal → Promotions", "受 TMGM 透過郵件或推播邀請的客戶；於 Portal → 活動頁報名"),
-          T("Làm lần lượt 5 nhiệm vụ: nạp 200 USD → 1 lot XAUUSD → 1 lot crypto → 1 lot forex → thêm 2 lot", "Complete 5 tasks in order: deposit USD 200 → 1 lot XAUUSD → 1 lot crypto → 1 lot forex → 2 more lots", "依序完成 5 項任務：入金 200 美元 → 1 手 XAUUSD → 1 手加密貨幣 → 1 手外匯 → 再 2 手"),
-          T("Phải xong cả 5 nhiệm vụ mới có thưởng; coupon dùng một lần khi đổi món 20 USD cashback, hạn 08/11/2026", "No reward until all 5 tasks are done; the coupon is used once on the USD 20 cashback item, valid until 8 Nov 2026", "須完成全部 5 項任務才有獎勵；折扣券僅可用於兌換 20 美元現金回贈一次，有效至 2026/11/8"),
-        ],
-      },
-      {
-        key: "winYourRide", group: "marketing", share: "public", icon: "trophy", from: "2026-08-20", until: "2026-11-20",
-        name: T("Win Your Ride (VN)", "Win Your Ride (VN)", "Win Your Ride（越南）"),
-        value: T("Bốc thăm xe máy điện VinFast", "VinFast e-scooter lucky draw", "VinFast 電動機車抽獎"),
-        seg: T("Khách mới", "New clients", "新客戶"),
-        rules: [
-          T("Khách chưa có tài khoản TMGM trước 20/08/2026, đăng ký qua tracking link VN của TMGM", "Clients with no TMGM account before 20 Aug 2026, registered via TMGM's VN tracking link", "2026/8/20 前未有 TMGM 帳戶、經 TMGM 越南追蹤連結註冊的客戶"),
-          T("Một khoản FTD ≥ 150 USD (không cộng dồn) và giữ net deposit ≥ 150 USD đủ 90 ngày; không yêu cầu giao dịch", "A single FTD ≥ USD 150 (no top-ups) and net deposit ≥ USD 150 held for 90 days; no trading required", "單筆首次入金 ≥ 150 美元（不可合併）並維持淨入金 ≥ 150 美元 90 天；無交易要求"),
-          T("FTD tới 20/11/2026, giữ tiền tới 20/02/2027; 1 xe cho mỗi 20 khách đủ điều kiện, không phải ai cũng trúng", "FTD by 20 Nov 2026, hold until 20 Feb 2027; 1 scooter per 20 eligible clients, not everyone wins", "首次入金截至 2026/11/20，維持至 2027/2/20；每 20 位合格客戶抽出 1 台，並非人人有獎"),
-        ],
-        note: T("Khách vào qua IB link của đối tác có thể không được tính: hỏi AM trước khi giới thiệu.", "Clients who come through a partner's IB link may not count: check with your AM first.", "經合作夥伴 IB 連結註冊的客戶可能不計入：介紹前請先向 AM 確認。"),
-      },
-      {
-        key: "jayChou", group: "marketing", share: "public", icon: "users", from: "2026-10-01", until: "2026-12-31",
-        url: "https://lnd.tmgm.com/en/JayChouMY",
-        name: T("Jay Chou Malaysia Giveaway", "Jay Chou Malaysia Giveaway", "周杰倫馬來西亞演唱會門票贈送"),
-        value: T("Sạc dự phòng Xiaomi + khăn, bốc thăm vé concert", "Xiaomi power bank + towel, plus a concert ticket draw", "小米行動電源 + 毛巾，另可抽演唱會門票"),
-        seg: T("Khách mới", "New clients", "新客戶"),
-        rules: [
-          T("Đăng ký qua tracking link trên Instagram/Facebook chính thức của TMGM; tài khoản đăng ký từ trước không tính", "Register via the tracking link on TMGM's official Instagram/Facebook; accounts registered earlier don't count", "須經 TMGM 官方 Instagram/Facebook 追蹤連結註冊；先前已註冊者不計"),
-          T("FTD ≥ 50 USD và 1,5 lot sản phẩm chỉ định", "FTD ≥ USD 50 and 1.5 lots of the specified products", "首次入金 ≥ 50 美元並交易 1.5 手指定產品"),
-          T("5 người trúng, mỗi người 2 vé CAT3 (concert 23/01/2027 tại Malaysia), công bố trước 08/01/2027", "5 winners, 2 CAT3 tickets each (concert 23 Jan 2027, Malaysia), announced by 8 Jan 2027", "抽出 5 位得主，每位 2 張 CAT3 門票（2027/1/23 馬來西亞），2027/1/8 前公布"),
-        ],
-        note: T("Không đi qua IB link của đối tác.", "Doesn't go through a partner's IB link.", "不經合作夥伴 IB 連結。"),
-      },
-      {
-        key: "thaiConcert", group: "marketing", share: "private", icon: "users", from: "2026-10-01", until: "2026-10-25",
-        name: T("Vé Thailand Concert", "Thailand Concert tickets", "泰國演唱會門票"),
-        value: T("Tối đa 2 vé, concert 07/11/2026", "Up to 2 tickets, concert 7 Nov 2026", "最多 2 張，演唱會 2026/11/7"),
-        seg: T("Khách và IB", "Clients and IBs", "客戶與 IB"),
-        rules: [
-          T("Khách: đăng ký ở Portal → Promotions, đạt net deposit và lot theo T&C, đổi voucher ở Points Store", "Clients: sign up on Portal → Promotions, meet the T&C net deposit and lots, redeem the voucher in the Points Store", "客戶：於 Portal → 活動頁報名，達到條款淨入金與手數，於點數商城兌換"),
-          T("IB: AM nộp đơn; dữ liệu xét theo các mốc 05, 12, 19, 26/10; không trộn hạng vé", "IBs: the AM applies; data is reviewed on 5, 12, 19 and 26 Oct; no mixing ticket tiers", "IB：由 AM 申請；資料於 10/5、12、19、26 審核；不可混搭票價級別"),
-          T("Trùng thưởng tháng IB thì chọn một; mỗi người chỉ tham gia bản khách hoặc bản IB", "If it overlaps the monthly IB bonus, pick one; each person joins either the client or the IB version", "與 IB 月度獎金重疊須擇一；每人只能參加客戶版或 IB 版"),
-        ],
-      },
-      {
-        key: "carnival", group: "marketing", share: "private", icon: "users", from: "2026-08-10", until: "2026-12-31",
-        name: T("Vé Carnival II", "Carnival II tickets", "Carnival II 門票"),
-        value: T("Khách tối đa 2 vé, IB tối đa 4 vé (CAT1 đã hết)", "Clients up to 2 tickets, IBs up to 4 (CAT1 sold out)", "客戶最多 2 張，IB 最多 4 張（CAT1 已兌完）"),
-        seg: T("Khách và IB", "Clients and IBs", "客戶與 IB"),
-        rules: [
-          T("Khách (net deposit/lot): 7.000/30 → CAT6 · 10.000/50 → CAT4 · 20.000/80 → CAT3 · 35.000/120 → CAT2", "Clients (net deposit/lots): 7,000/30 → CAT6 · 10,000/50 → CAT4 · 20,000/80 → CAT3 · 35,000/120 → CAT2", "客戶（淨入金／手數）：7,000/30 → CAT6 · 10,000/50 → CAT4 · 20,000/80 → CAT3 · 35,000/120 → CAT2"),
-          T("IB: AM nộp đơn khi đủ điều kiện, được trộn hạng vé; trùng thưởng tháng IB thì chọn một", "IBs: the AM applies once eligible, tiers can be mixed; if it overlaps the monthly IB bonus, pick one", "IB：達標後由 AM 申請，可混搭級別；與 IB 月度獎金重疊須擇一"),
-          T("Concert 23/01/2027 tại Malaysia; khách đổi voucher ở Points Store", "Concert 23 Jan 2027 in Malaysia; clients redeem the voucher in the Points Store", "演唱會 2027/1/23 於馬來西亞；客戶於點數商城兌換"),
-        ],
-      },
-      {
-        key: "premierLeague", group: "marketing", share: "private", icon: "trophy", from: "2026-08-10", until: "2027-05-16",
-        name: T("Vé Premier League", "Premier League tickets", "英超門票"),
-        value: T("Tối đa 2 vé mỗi kỳ xét", "Up to 2 tickets per review cycle", "每個審核週期最多 2 張"),
-        seg: T("Khách và IB", "Clients and IBs", "客戶與 IB"),
-        rules: [
-          T("Khách (net deposit/lot): General 10.000/50 → 1 vé, 20.000/100 → 2 vé; Hospitality 25.000/150 → 1 vé, 50.000/300 → 2 vé", "Clients (net deposit/lots): General 10,000/50 → 1 ticket, 20,000/100 → 2; Hospitality 25,000/150 → 1, 50,000/300 → 2", "客戶（淨入金／手數）：一般席 10,000/50 → 1 張，20,000/100 → 2 張；招待席 25,000/150 → 1 張，50,000/300 → 2 張"),
-          T("IB: AM nộp đơn khi đủ điều kiện, xét theo chu kỳ tháng; trùng thưởng tháng IB thì chọn một", "IBs: the AM applies once eligible, reviewed monthly; if it overlaps the monthly IB bonus, pick one", "IB：達標後由 AM 申請，按月審核；與 IB 月度獎金重疊須擇一"),
-          T("Lịch trận theo giờ London; có trận Chelsea – Man United ngày 31/10/2026", "Fixtures in London time; includes Chelsea v Man United on 31 Oct 2026", "賽程以倫敦時間為準；包括 2026/10/31 切爾西對曼聯"),
-        ],
-      },
-    ],
 
-    // So sánh 8 sàn (slide So sánh). Rebate và chi phí khách (USD/lot) theo file "Competitor Research 7 Brokers SEA",
-    // sheet "Rebate and Spread": std = dòng STD, raw = dòng Edge. null = chưa có số liệu (hiện "Đang cập nhật", không tính).
-    // Rebate: fx/gold = USD/lot, hoặc pct = % chi phí khách (Vantage; "Net Cost" trong file = chi phí × (1 − pct)).
-    // Chi phí khách là số minh họa, spread thả nổi.
-    // KM: tiers = thưởng tháng theo net deposit + lot ("mib" = bảng mibTiers); subPct = % thêm trên hoa hồng Sub-IB;
-    // keepPct = % thêm trên rebate MIB tích lũy (giữ lại); perLot = thưởng trọn đời quy đổi USD/lot theo "Cost $/lot" trong file.
-    competitors: {
-      brokers: [
-        {
-          name: "TMGM", tiers: "mib", ecn: true,
-          std: { acc: "STD", fx: 10, gold: 20, costFx: 18, costGold: 33 },
-          raw: { acc: "Edge", fx: 2, gold: 2, costFx: 7, costGold: 15 },
-          promo: T("KM đặc biệt MIB theo tháng; Edge thêm ECN Q4", "Monthly MIB special promo; Edge adds the Q4 ECN boost", "MIB 專屬月度活動；Edge 另加 ECN Q4"),
-        },
-        {
-          name: "Exness", perLot: { fx: 0, gold: 0.94 },
-          std: { acc: "Standard", fx: 3.2, gold: 14.4, costFx: 8, costGold: 36 },
-          raw: { acc: "Zero", fx: 0, gold: 2.7, costFx: 0.1, costGold: 9.72 },
-          promo: T("Thưởng trọn đời theo lot vàng, quy đổi 0,94 USD/lot vàng", "Lifetime gold-volume reward, counted as USD 0.94/gold lot", "黃金終身交易量獎勵，折算每手黃金 0.94 美元"),
-        },
-        {
-          name: "XM", subPct: 10, keepPct: 20,
-          std: { acc: "Standard", fx: 9, gold: 17, costFx: 19, costGold: 50 },
-          raw: { acc: "Ultra Low", fx: 3.5, gold: 8, costFx: 10, costGold: 22 },
-          promo: T("2 khoản: +20% rebate MIB tích lũy, +10% hoa hồng của Sub-IB", "2 parts: +20% on the MIB's accrued rebates, +10% of Sub-IB commissions", "兩部分：MIB 累計返傭 +20%，子代理佣金 +10%"),
-        },
-        {
-          name: "HFM",
-          tiers: [
-            { deposit: 5000, lots: 50, reward: 100 },
-            { deposit: 10000, lots: 150, reward: 500 },
-            { deposit: 25000, lots: 250, reward: 1000 },
-            { deposit: 50000, lots: 400, reward: 3000 },
-            { deposit: 100000, lots: 750, reward: 5000 },
-          ],
-          std: { acc: "Premium", fx: 6.5, gold: 16, costFx: 13, costGold: 32 },
-          raw: { acc: "Zero", fx: 0, gold: 0, costFx: 6, costGold: 20 }, // file ghi rebate "-"
-          promo: T("Revshare+ theo tháng: 100–5.000 USD", "Monthly Revshare+: USD 100–5,000", "每月 Revshare+：100–5,000 美元"),
-        },
-        {
-          name: "Vantage",
-          std: { acc: "Standard", pct: 53, costFx: 13, costGold: 23 }, // rebate = 53% chi phí khách
-          raw: { acc: "ECN", fx: 2, gold: 2, costFx: 7, costGold: 16 },
-          promo: T("Không có KM IB", "No IB promotion", "無 IB 活動"),
-        },
-        {
-          name: "AvaTrade",
-          std: { acc: "Standard", fx: 6.5, gold: 16, costFx: 13, costGold: 32 },
-          raw: { acc: "Premium", fx: 1, gold: 2.5, costFx: 7, costGold: 17 },
-          promo: T("Cashback 3 USD/lot 2 tháng đầu (chưa tính)", "USD 3/lot cashback for the first 2 months (not counted)", "首 2 個月每手 3 美元現金回贈（未計入）"),
-        },
-        {
-          name: "Axi", perLot: { fx: 1, gold: 1 },
-          std: { acc: "Standard", fx: 5, gold: 7, costFx: 7, costGold: 13 },
-          raw: { acc: "Premium", fx: 3, gold: 5, costFx: 4.5, costGold: 10.5 },
-          promo: T("Thưởng trọn đời theo khối lượng, quy đổi 1 USD/lot", "Lifetime volume milestone, counted as USD 1/lot", "終身交易量里程碑，折算每手 1 美元"),
-        },
-        {
-          name: "PU Prime",
-          std: { acc: "Standard", fx: 8, gold: 15, costFx: 15, costGold: 28 },
-          raw: { acc: "Premium", fx: 2.4, gold: 2, costFx: 8, costGold: 14 },
-          promo: T("Không có KM IB, cho IB tự cộng markup (chưa tính)", "No IB promotion; IBs add their own markup (not counted)", "無 IB 活動，由 IB 自行加點（未計入）"),
-        },
-        // EC Markets, VT Markets: KHÔNG có trong file khảo sát. Số liệu lấy từ nguồn công khai (kiểm tra 09/10/2026), là ước tính (est: true).
-        // VT Markets: rebate IB = mức TỐI ĐA theo bestforexib.com (Standard 8 FX / 17 vàng; Raw ECN 2 / 2; trang rebate cho trader ghi 7,2 và 1,8 = 90% hoa hồng IB).
-        //   Chi phí khách: Standard STP từ 1,2 pip EURUSD (vtmarkets.com) ≈ 12; vàng spread 0,30 ≈ 30 (BrokerAnalysis 08/2026);
-        //   Raw ECN 6 USD/lot 2 chiều + EURUSD ≈ 0,3 pip ≈ 9 (Traders Union); vàng 0,10 + 6 ≈ 16.
-        // EC Markets: KHÔNG công bố rebate IB theo lot → fx/gold null (nhập tay ở cách Đối đầu).
-        //   Chi phí khách: Standard 1,0–1,2 pip ≈ 11; ECN 3 USD/lot 2 chiều + ≈ 0,1 pip ≈ 4 (Finance Magnates, Traders Union). Vàng chưa có số.
-        {
-          name: "EC Markets", est: true,
-          std: { acc: "Standard", fx: null, gold: null, costFx: 11, costGold: null },
-          raw: { acc: "ECN", fx: null, gold: null, costFx: 4, costGold: null },
-          promo: T("Không công bố mức rebate IB: nhập số EC đề nghị ở cách Đối đầu", "IB rebate rates not published: enter EC's offer in Head-to-head", "未公開 IB 返傭標準：請於「對決」輸入 EC 的報價"),
-          profile: [
-            T("Giấy phép: FCA 571881, ASIC 414198, FSCA 51886, FMA FSP197465, FSC Mauritius GB2100130, FSA Seychelles SD009", "Licences: FCA 571881, ASIC 414198, FSCA 51886, FMA FSP197465, FSC Mauritius GB2100130, FSA Seychelles SD009", "牌照：FCA 571881、ASIC 414198、FSCA 51886、FMA FSP197465、模里西斯 FSC GB2100130、塞席爾 FSA SD009"),
-            T("Thương hiệu: đối tác toàn cầu chính thức của Liverpool FC (hợp đồng nhiều năm từ 2025)", "Brand: Official Global Partner of Liverpool FC (multi-year deal since 2025)", "品牌：利物浦足球俱樂部官方全球合作夥伴（2025 年起多年合約）"),
-            T("Tài khoản: Standard (từ 1,0 pip, không phí), ECN (từ 0,0 pip + 3 USD/lot 2 chiều), PRO (không phí, vàng từ 8 USD/lot); đòn bẩy tới 1:1000", "Accounts: Standard (from 1.0 pip, no commission), ECN (from 0.0 pip + USD 3/lot round turn), PRO (no commission, gold from USD 8/lot); leverage up to 1:1000", "帳戶：Standard（1.0 點起，免手續費）、ECN（0.0 點起 + 來回每手 3 美元）、PRO（免手續費，黃金每手 8 美元起）；槓桿最高 1:1000"),
-            T("IB: thanh toán tự động, không giới hạn thu nhập, dashboard theo thời gian thực; giải “Best IB/Affiliate Programme” iFX EXPO Dubai 2025", "IB: automated payouts, no earnings cap, real-time dashboard; “Best IB/Affiliate Programme” at iFX EXPO Dubai 2025", "IB：自動結算、收入無上限、即時儀表板；獲 iFX EXPO Dubai 2025「最佳 IB／聯盟計劃」"),
-          ],
-          src: T("Nguồn: ecmarkets.com, Finance Magnates, Traders Union, liverpoolfc.com (kiểm tra 09/10/2026). Ước tính, chưa xác nhận với sàn.", "Sources: ecmarkets.com, Finance Magnates, Traders Union, liverpoolfc.com (checked 9 Oct 2026). Estimates, not confirmed with the broker.", "來源：ecmarkets.com、Finance Magnates、Traders Union、liverpoolfc.com（2026/10/9 核對）。為估算，未經平台確認。"),
-        },
-        {
-          name: "VT Markets", est: true,
-          std: { acc: "Standard STP", fx: 8, gold: 17, costFx: 12, costGold: 30 },
-          raw: { acc: "Raw ECN", fx: 2, gold: 2, costFx: 9, costGold: 16 },
-          promo: T("Không có KM IB theo tháng công khai; có ClubÉlite (VIP) và IB Support Program theo đợt (chưa tính)", "No public monthly IB promo; ClubÉlite (VIP) and periodic IB Support Program (not counted)", "無公開的每月 IB 活動；另有 ClubÉlite（VIP）及不定期 IB Support Program（未計入）"),
-          profile: [
-            T("Giấy phép: FSC Mauritius GB23202269, FSCA 50865 (trung gian), UAE CMA 20200000299 (chỉ giới thiệu); không thấy số AFSL ASIC", "Licences: FSC Mauritius GB23202269, FSCA 50865 (intermediary), UAE CMA 20200000299 (introduction only); no ASIC AFSL number found", "牌照：模里西斯 FSC GB23202269、FSCA 50865（中介）、阿聯酋 CMA 20200000299（僅介紹）；未見 ASIC AFSL 編號"),
-            T("Tài khoản: Standard STP (từ 1,2 pip, không phí), Raw ECN (từ 0,0 pip + 6 USD/lot 2 chiều), Cent (MT4); có swap-free cho STP và ECN", "Accounts: Standard STP (from 1.2 pips, no commission), Raw ECN (from 0.0 pip + USD 6/lot round turn), Cent (MT4); swap-free on STP and ECN", "帳戶：Standard STP（1.2 點起，免手續費）、Raw ECN（0.0 點起 + 來回每手 6 美元）、Cent（MT4）；STP 與 ECN 可申請免隔夜利息"),
-            T("IB: rebate tính hằng ngày, rút qua IB Portal; nhiều tầng Sub-IB; có lựa chọn CPA hoặc Hybrid; chương trình VIP ClubÉlite", "IB: rebates calculated daily, withdrawn via the IB Portal; multi-tier Sub-IBs; CPA or hybrid options; ClubÉlite VIP programme", "IB：返傭每日計算，可經 IB Portal 提取；多層子代理；可選 CPA 或混合模式；ClubÉlite VIP 計劃"),
-            T("Rebate IB là mức tối đa theo nguồn bên thứ ba (VT không công bố chính thức): cần xác nhận khi đàm phán", "IB rebates are third-party maximums (VT doesn't publish them): confirm when negotiating", "IB 返傭為第三方所列上限（VT 未正式公布）：洽談時須確認"),
-          ],
-          src: T("Nguồn: vtmarkets.com, bestforexib.com, BrokerAnalysis (08/2026), Traders Union (kiểm tra 09/10/2026). Ước tính, chưa xác nhận với sàn.", "Sources: vtmarkets.com, bestforexib.com, BrokerAnalysis (Aug 2026), Traders Union (checked 9 Oct 2026). Estimates, not confirmed with the broker.", "來源：vtmarkets.com、bestforexib.com、BrokerAnalysis（2026/8）、Traders Union（2026/10/9 核對）。為估算，未經平台確認。"),
-        },
-      ],
-    },
 
     // ---------- Nội dung từng section ----------
 
     sections: {
+      m1: locked("mib", T("Hệ thống", "Network", "體系"), true),
+      m2: locked("common", T("KM MIB", "MIB promo", "MIB 活動")),
+      m3: locked("mib", T("Điều kiện", "Rules", "條件"), true),
+      m5: locked("common", T("Ví dụ", "Example", "示例")),
+      "so-sanh": locked("mib", T("So sánh", "Compare", "比較")),
+      ib: locked("ib", T("IB", "IB", "IB"), true),
+      faq: locked("qa", T("Hỏi đáp", "Q&A", "問答"), true),
+
       bia: {
         part: "common",
         label: T("Bìa", "Cover", "封面"),
@@ -585,7 +360,7 @@
             label: { mib: T("Thưởng tháng MIB", "MIB monthly bonus", "MIB 月度獎金"), ib: T("Thưởng tháng IB", "IB monthly bonus", "IB 月度獎金") },
             link: "m2",
             who: { mib: T("MIB", "MIB", "MIB"), ib: T("IB", "IB", "IB") },
-            detail: T("Theo net deposit và lot: 1.300–20.000 USD (MIB), 260–15.000 USD (IB).", "By net deposit and lots: USD 1,300–20,000 (MIB), USD 260–15,000 (IB).", "依淨入金與手數：MIB 1,300–20,000 美元，IB 260–15,000 美元。"),
+            detail: T("Thưởng theo bậc net deposit và lot, nộp qua BD. Bảng bậc chi tiết dành cho đối tác có mã truy cập.", "Paid by net-deposit and lot tier, claimed through your BD. The full tier table is for partners with an access code.", "依淨入金與手數級別發放，透過 BD 申請。完整級別表僅供持有存取碼的合作夥伴查看。"),
           },
           {
             icon: "zap", value: T("tới 5 USD/lot", "up to USD 5/lot", "最高 5 美元/手"), label: T("Rebate ECN Q4", "Q4 ECN boost", "ECN Q4 加碼"), link: "ecn-q4",
@@ -653,7 +428,7 @@
           "<b>Higher rebates mean higher client costs:</b> STD05 pays USD 15/lot on FX but the client pays about USD 22, 3× Edge. Q4 narrows the gap: Edge pays up to USD 5 of the client's USD 7 commission.",
           "<b>返傭越高，客戶成本越高：</b>STD05 外匯返傭 15 美元/手，但客戶成本約 22 美元，是 Edge 的 3 倍。Q4 縮小了差距：在客戶支付的 7 美元手續費中，Edge 最高可返 5 美元。"
         ),
-        adviceTitle: T("Định hướng của AM", "Your AM's recommendation", "客戶經理建議"),
+        adviceTitle: T("Định hướng của BD", "Your BD's recommendation", "BD 建議"),
         advice: T(
           "<b>Mix account:</b> phối hợp nhiều loại tài khoản trong hệ thống. Edge/Classic cho khách giao dịch nhiều để giữ chân lâu dài; Prime cho nhóm IB (MIB chia rebate cho Sub-IB); STD chỉ dành cho IB có khách trực tiếp.",
           "<b>Mix account:</b> combine account types across your network. Edge/Classic for high-volume clients, to keep them longer; Prime for IB groups (MIBs sharing rebates with Sub-IBs); STD only for IBs with direct clients.",
@@ -779,7 +554,7 @@
         },
         lead: T("Rebate cơ bản có mặc định; khuyến mãi là phần cộng thêm.", "The base rebate is the default; promotions are add-ons.", "基本返傭為預設；活動為附加項目。"),
         tradeDate: T("Ngày giao dịch (T)", "Trade date (T)", "交易日期（T）"),
-        applyDate: T("Ngày AM nộp đơn", "Date your AM files", "AM 提交申請日期"),
+        applyDate: T("Ngày BD nộp đơn", "Date your BD files", "BD 提交申請日期"),
         addonsTitle: T("Thêm khuyến mãi (add-on)", "Add promotions (add-ons)", "加入活動（附加項目）"),
         addonsHint: T(
           "Bật khoản nào để xem ngày nộp đơn và ngày nhận tiền của khoản đó.",
@@ -791,7 +566,7 @@
         colPayout: T("Nhận tiền", "Payout", "入帳"),
         pending: T("chờ TMGM xác nhận", "awaiting TMGM confirmation", "待 TMGM 確認"),
         applyNone: T("Không cần đăng ký", "No application needed", "無需申請"),
-        applyAm: T("AM đăng ký một lần", "Your AM registers once", "AM 一次性登記"),
+        applyAm: T("BD đăng ký một lần", "Your BD registers once", "BD 一次性登記"),
         applyBy: T("Hạn nộp: {d}", "Apply by {d}", "申請截止：{d}"),
         applyWeekend: T("Rơi vào cuối tuần, nên nộp trước {r}", "Falls on a weekend: file by {r}", "適逢週末，請於 {r} 前提交"),
         late: T("Quá hạn nộp", "Past the deadline", "已逾期"),
@@ -816,128 +591,8 @@
         },
       },
 
-      m1: {
-        hidden: true, // ẩn khỏi trang; xóa dòng này để hiện lại
-        part: "mib",
-        label: T("Hệ thống", "Network", "體系"),
-        title: T("Xây hệ thống, không chỉ một tệp khách", "Build a network, not just a client list", "建立體系，而不只是客戶名單"),
-        subLabel: T("Sub-IB", "Sub-IB", "子代理"),
-        subValid: T("3 khách kích hoạt · 2 hoạt động", "3 activated · 2 active", "3 位已激活 · 2 位活躍"),
-        subOut: T("Chỉ có tài khoản riêng, không được tính", "Own account only — not counted", "僅有自己的帳戶，不計入"),
-        frame: T("Toàn bộ phần này được cộng vào KM MIB", "All of this counts toward the MIB promo", "以上全部計入 MIB 活動"),
-        // Minh họa: số khách và số khách hoạt động dưới mỗi Sub-IB
-        subs: [{ n: 4, active: 3 }, { n: 5, active: 2 }, { n: 3, active: 2 }, { n: 1, active: 0, out: true }],
-        rules: [
-          T("KM MIB cộng net deposit và lot của khách trực tiếp của MIB <b>và toàn bộ các nhánh Sub-IB</b> bên dưới.", "The MIB promo adds up net deposit and lots from your direct clients <b>and every Sub-IB branch</b> below you.", "MIB 活動合計 MIB 直客<b>及其下所有子代理分支</b>的淨入金與手數。"),
-          T("Sub-IB được tính khi có <b>≥ 3 khách trực tiếp được kích hoạt</b> và <b>≥ 2 khách nạp tiền, giao dịch</b> trong kỳ. Sub-IB chỉ có tài khoản riêng không được tính.", "A Sub-IB counts once it has <b>≥ 3 activated direct clients</b> and <b>≥ 2 who deposit and trade</b> in the period. A Sub-IB with only their own account does not count.", "子代理需在期內擁有<b>≥ 3 位已激活直客</b>，且<b>≥ 2 位入金並交易</b>才計入；僅有自己帳戶的子代理不計入。"),
-        ],
-        notes: T(
-          "“Mỗi Sub-IB anh/chị tuyển thêm làm tăng cả rebate lẫn bậc thưởng của cả nhánh.”",
-          "“Every Sub-IB you add lifts both the rebate and the bonus tier for the whole branch.”",
-          "「每增加一位子代理，整個分支的返傭和獎金級別都會提升。」"
-        ),
-      },
 
-      m2: {
-        part: "common",
-        label: T("KM MIB", "MIB promo", "MIB 活動"),
-        title: T("KM đặc biệt MIB: tới {v} mỗi tháng", "MIB special promo: up to {v} a month", "MIB 專屬活動：每月最高 {v}"),
-        titleIb: T("KM tháng IB: tới {v} mỗi tháng", "IB monthly promo: up to {v} a month", "IB 月度活動：每月最高 {v}"),
-        switchLabel: T("Chương trình", "Program", "計劃"),
-        promoMib: T("KM đặc biệt MIB", "MIB special promo", "MIB 專屬活動"),
-        promoIb: T("KM tháng IB", "IB monthly promo", "IB 月度活動"),
-        exclusive: T(
-          "<b>Chọn một trong hai:</b> MIB tham gia KM MIB thì MIB và Sub-IB trong nhánh không tham gia KM tháng IB cho khách trực tiếp (và ngược lại).",
-          "<b>Pick one:</b> an MIB that joins the MIB promo, and the Sub-IBs in its branch, cannot also join the monthly IB promo for direct clients (and vice versa).",
-          "<b>二選一：</b>MIB 參加 MIB 專屬活動後，MIB 及其分支內的子代理不能同時參加直客 IB 月度活動（反之亦然）。"
-        ),
-        edit: T("Tùy chỉnh bậc", "Customize tiers", "自訂級別"),
-        editClose: T("Đóng bảng tùy chỉnh", "Close editor", "關閉編輯"),
-        editHint: T(
-          "Sửa số, thêm hoặc xóa bậc theo bản KM mới nhất. Thay đổi áp dụng cho biểu đồ này, máy tính và slide So sánh, và được nhớ trên trình duyệt.",
-          "Edit the numbers, or add and remove tiers to match the latest promo. Changes apply to this chart, the calculator and the Compare slide, and are remembered in this browser.",
-          "依最新活動修改數字、新增或刪除級別。變更會套用至此圖表、計算器與「比較」頁，並保存在此瀏覽器。"
-        ),
-        colDeposit: T("Net deposit (USD)", "Net deposit (USD)", "淨入金（美元）"),
-        colLots: T("Lot", "Lots", "手數"),
-        colReward: T("Thưởng (USD)", "Reward (USD)", "獎金（美元）"),
-        addTier: T("Thêm bậc", "Add tier", "新增級別"),
-        delTier: T("Xóa bậc", "Remove tier", "刪除級別"),
-        resetTiers: T("Về mặc định", "Reset to default", "恢復預設"),
-        presetLabel: T("Bộ bậc có sẵn", "Ready-made set", "現成級別組"),
-        presetPdf5: T("5 bậc (PDF KM MIB tháng 10)", "5 tiers (October MIB promo PDF)", "5 級（10 月 MIB 活動 PDF）"),
-        presetXls7: T("7 bậc (file khảo sát đối thủ)", "7 tiers (competitor research file)", "7 級（競爭對手調查檔）"),
-        presetCustom: T("Tự nhập", "Custom", "自訂"),
-        custom: T("Đã tùy chỉnh", "Customized", "已自訂"),
-        warnLots: T("Có bậc cao hơn nhưng lot thấp hơn bậc trước", "A higher tier needs fewer lots than the tier before it", "較高級別所需手數低於前一級"),
-        warnReward: T("Có bậc cao hơn nhưng thưởng thấp hơn bậc trước", "A higher tier pays less than the tier before it", "較高級別獎金低於前一級"),
-        ib: {
-          plain: T("Thưởng tháng theo net deposit và lot của khách trực tiếp.", "Monthly bonus by your direct clients' net deposit and lots.", "依直客的淨入金與手數發放月度獎金。"),
-          axisNote: T("Mỗi nhóm: net deposit khách trực tiếp (USD) · lot yêu cầu", "Each group: direct-client net deposit (USD) · lots required", "每組：直客淨入金（美元）· 所需手數"),
-          condsTitle: T("Điều kiện KM tháng IB", "Monthly IB promo conditions", "IB 月度活動條件"),
-          conds: [
-            T("Chỉ tính net deposit và lot của khách trực tiếp (không tính Sub-IB).", "Only your direct clients' net deposit and lots count (not Sub-IBs).", "僅計算直客的淨入金與手數（不含子代理）。"),
-            T("Cần ít nhất 5 khách trực tiếp được kích hoạt, trong đó ít nhất 3 khách có nạp tiền và giao dịch trong kỳ.", "Needs at least 5 direct enabled clients, of which at least 3 deposit and trade in the period.", "至少需要 5 位已激活直客，其中至少 3 位於期內入金並交易。"),
-            T("Net deposit = tổng nạp − tổng rebate (của mọi MIB và Sub-IB) − rút tiền trong kỳ.", "Net deposit = total deposits − all rebates (including MIBs and Sub-IBs) − withdrawals in the period.", "淨入金 = 總入金 − 全部返傭（含所有 MIB 與子代理）− 期內出金。"),
-            T("Forex và kim loại quý tính 1 lot; chỉ số, dầu thô, crypto tính 1/10 lot; cổ phiếu không tính.", "Forex and bullion count as 1 lot; indices, crude oil and crypto count as 1/10 lot; shares are excluded.", "外匯與貴金屬計 1 手；股指、原油、加密貨幣計 1/10 手；股票不計。"),
-            T("Lệnh giữ dưới 2 phút và lệnh hedging không tính vào lot.", "Trades held under 2 minutes and hedging trades don't count toward lots.", "持倉少於 2 分鐘的訂單及對沖訂單不計入手數。"),
-            T("Tài khoản Cents chỉ tính net deposit, không tính lot.", "Cents accounts count net deposit only, not lots.", "Cents 帳戶僅計淨入金，不計手數。"),
-            T("Nộp qua AM, thưởng về trong 14 ngày làm việc sau khi duyệt.", "Apply through your AM; the bonus is paid within 14 working days of approval.", "透過 AM 申請，審核通過後 14 個工作日內發放獎金。"),
-          ],
-        },
-        legendIb: T("KM IB gộp nhánh (lot +50%)", "IB promo, branches combined (lots +50%)", "IB 活動分支合併（手數 +50%）"),
-        legendMib: T("KM đặc biệt MIB", "MIB special promo", "MIB 專屬活動"),
-        compare: T(
-          "Với cùng ngưỡng net deposit và lot, KM đặc biệt MIB trả cao hơn <b>33–58%</b> so với cách gộp Sub-IB vào KM IB thường (ngưỡng lot tăng 50%).",
-          "At the same net-deposit and lot thresholds, the MIB special promo pays <b>33–58% more</b> than rolling Sub-IBs into the standard IB promo (lot thresholds +50%).",
-          "在相同淨入金與手數門檻下，MIB 專屬活動比將子代理併入一般 IB 活動高出 <b>33–58%</b>（手數門檻提高 50%）。"
-        ),
-        plain: T("Thưởng tháng theo bậc net deposit và lot của toàn nhánh.", "Monthly bonus by network-wide net deposit and lot tier.", "依整個體系的淨入金與手數級別發放月度獎金。"),
-        office: T("Đổi lại, MIB phải chứng minh có văn phòng.", "In return, the MIB must show a physical office.", "相對地，MIB 需證明擁有實體辦公室。"),
-        perMonth: T("mỗi tháng", "per month", "每月"),
-        tierLine: T("bậc {d} net deposit · {l} lot", "tier: {d} net deposit · {l} lots", "級別：淨入金 {d} · {l} 手"),
-        axisNote: T("Mỗi nhóm: net deposit toàn nhánh (USD) · lot yêu cầu", "Each group: network net deposit (USD) · lots required", "每組：體系淨入金（美元）· 所需手數"),
-        source: T("Số liệu KM tháng 10/2026, minh họa.", "October 2026 promo figures, illustrative.", "2026 年 10 月活動數據，僅供示例。"),
-        lot: T("lot", "lots", "手"),
-        warn: T(
-          "<b>Không cộng dồn:</b> MIB và Sub-IB trong nhánh không tham gia KM net deposit hàng tháng cho khách trực tiếp.",
-          "<b>No stacking:</b> the MIB and the Sub-IBs in its branch cannot also join the monthly direct-client net-deposit promo.",
-          "<b>不可疊加：</b>MIB 及其分支內的子代理不能同時參加直客月度淨入金活動。"
-        ),
-        notes: T(
-          "“Cùng ngưỡng, KM đặc biệt MIB trả cao hơn hẳn so với gộp nhánh vào KM IB. Đổi lại MIB cần chứng minh có văn phòng.”<br>Quy tắc “gộp nhánh +50% lot” là Internal: chỉ bật meta.showInternal khi TMGM đã xác nhận.",
-          "“At the same thresholds, the MIB special promo pays clearly more than rolling the branch into the IB promo. In return, the MIB needs to show an office.”<br>The “branch combined, lots +50%” rule is Internal: only turn on meta.showInternal once TMGM confirms.",
-          "「在相同門檻下，MIB 專屬活動明顯高於將分支併入 IB 活動。相對地，MIB 需證明擁有辦公室。」<br>「分支合併、手數 +50%」屬內部規則：TMGM 確認後才開啟 meta.showInternal。"
-        ),
-      },
 
-      m3: {
-        hidden: true, // ẩn khỏi trang; xóa dòng này để hiện lại
-        part: "mib",
-        label: T("Điều kiện", "Rules", "條件"),
-        title: T("Điều kiện rõ ràng, duyệt nhanh", "Clear conditions, fast approval", "條件清楚，審核快速"),
-        office: T("Hồ sơ văn phòng", "Office documents", "辦公室文件"),
-        officeItems: [
-          { icon: "file", label: T("Hợp đồng thuê", "Lease agreement", "租約") },
-          { icon: "building", label: T("Biển địa chỉ văn phòng", "Office address signage", "辦公室地址招牌") },
-          { icon: "users", label: T("Ảnh nhân viên làm việc", "Photos of staff at work", "員工工作照片") },
-        ],
-        sub: T("Sub-IB hợp lệ", "Qualifying Sub-IB", "合格子代理"),
-        subRule: T("≥ 3 khách kích hoạt, ≥ 2 hoạt động", "≥ 3 activated, ≥ 2 active clients", "≥ 3 位已激活、≥ 2 位活躍客戶"),
-        net: T("Net deposit", "Net deposit", "淨入金"),
-        netParts: [T("Nạp", "Deposits", "入金"), T("Rút", "Withdrawals", "出金"), T("Rebate", "Rebates", "返傭"), T("Net deposit", "Net deposit", "淨入金")],
-        netNote: T("Rebate gồm toàn bộ rebate của MIB lẫn Sub-IB.", "Rebates include every MIB and Sub-IB rebate.", "返傭包括 MIB 與所有子代理的返傭。"),
-        steps: [
-          T("Gửi hồ sơ qua AM", "Submit documents via your AM", "透過 AM 提交文件"),
-          T("Sales Manager duyệt", "Sales Manager approves", "銷售經理審核"),
-          T("Thưởng về trong 14 ngày làm việc", "Bonus paid within 14 working days", "14 個工作日內發放獎金"),
-        ],
-        notes: T(
-          "“Em sẽ chuẩn bị sẵn checklist hồ sơ; anh/chị chỉ cần gửi ảnh và hợp đồng.”",
-          "“I'll prepare the document checklist — you just send the photos and the lease.”",
-          "「我會準備好文件清單，您只需傳送照片和租約。」"
-        ),
-      },
 
       m4: {
         part: "common",
@@ -966,183 +621,8 @@
         ),
       },
 
-      m5: {
-        part: "mib",
-        label: T("Ví dụ", "Example", "示例"),
-        title: T("Một tháng của MIB có 5 Sub-IB, 340.000 USD net deposit", "One month for an MIB with 5 Sub-IBs and USD 340,000 net deposit", "擁有 5 個子代理、淨入金 340,000 美元的 MIB 一個月"),
-        sampleTitle: T("Ví dụ mẫu", "Sample case", "示例"),
-        sample: [
-          T("5 Sub-IB", "5 Sub-IBs", "5 個子代理"),
-          T("340.000 USD net deposit", "USD 340,000 net deposit", "淨入金 340,000 美元"),
-          T("2.400 lot (1.000 FX, 1.400 vàng)", "2,400 lots (1,000 FX, 1,400 gold)", "2,400 手（外匯 1,000、黃金 1,400）"),
-          T("Tài khoản Prime", "Prime account", "Prime 帳戶"),
-          T("Chia 70% rebate cho Sub-IB", "70% of rebate shared to Sub-IBs", "70% 返傭分給子代理"),
-        ],
-        sampleNote: T("Tỷ lệ chia do MIB tự thỏa thuận; chưa tính hoàn swap.", "The share is agreed by the MIB; swap rebates not included.", "分成比例由 MIB 自行約定；未計入隔夜利息返還。"),
-        calcTitle: T("Số của anh/chị", "Your numbers", "您的數據"),
-        inputs: {
-          lotsFx: T("Lot FX / tháng", "FX lots / month", "外匯手數／月"),
-          lotsGold: T("Lot vàng / tháng", "Gold lots / month", "黃金手數／月"),
-          account: T("Loại tài khoản", "Account type", "帳戶類型"),
-          deposit: T("Net deposit toàn nhánh (USD)", "Network net deposit (USD)", "體系淨入金（美元）"),
-          share: T("Chia cho Sub-IB (%)", "Shared to Sub-IBs (%)", "分給子代理（%）"),
-        },
-        reset: T("Về ví dụ mẫu", "Reset to sample", "恢復示例"),
-        bars: [
-          T("Tổng rebate nhánh", "Network rebate", "體系總返傭"),
-          T("Chia Sub-IB", "Paid to Sub-IBs", "分給子代理"),
-          T("MIB giữ lại", "MIB keeps", "MIB 保留"),
-          T("Thưởng KM MIB", "MIB promo bonus", "MIB 活動獎金"),
-          T("Tổng MIB nhận", "MIB total", "MIB 總收入"),
-        ],
-        ecnBar: T("ECN Q4 (Edge)", "Q4 ECN (Edge)", "ECN Q4（Edge）"),
-        swapBar: T("Hoàn swap", "Swap rebate", "隔夜利息返還"),
-        addonsLabel: T("Add-on (mặc định tắt)", "Add-ons (off by default)", "附加項目（預設關閉）"),
-        addonEcn: T("ECN Q4 (chỉ Edge)", "Q4 ECN boost (Edge only)", "ECN Q4 加碼（僅 Edge）"),
-        addonSwap: T("Hoàn swap", "Swap rebate", "隔夜利息返還"),
-        swapFee: T("Phí swap khách trực tiếp trả / tháng (USD)", "Swap fees direct clients pay / month (USD)", "直客每月支付的隔夜利息（美元）"),
-        swapNd: T("Net deposit khách trực tiếp (USD)", "Direct-client net deposit (USD)", "直客淨入金（美元）"),
-        swapWeekly: T("Hoàn swap tuần (30%)", "Weekly swap rebate (30%)", "每週隔夜利息返還（30%）"),
-        swapMonthly: T("Hoàn swap tháng ({p}%)", "Monthly swap rebate ({p}%)", "每月隔夜利息返還（{p}%）"),
-        swapMonthlyNone: T("Hoàn swap tháng (chưa vượt 5.000 USD)", "Monthly swap rebate (not over USD 5,000 yet)", "每月隔夜利息返還（尚未超過 5,000 美元）"),
-        swapNote: T(
-          "Hoàn swap tính trên khách trực tiếp; MIB giữ 100%, chưa chia Sub-IB. Phí swap và net deposit ở trên chỉ là số minh họa.",
-          "Swap rebates are based on direct clients; the MIB keeps 100%, nothing shared with Sub-IBs. The swap fees and net deposit above are illustrative.",
-          "隔夜利息返還按直客計算；MIB 全額保留，未分給子代理。上方隔夜利息與淨入金僅為示例。"
-        ),
-        baseTotal: T("Tổng cơ bản (chưa add-on)", "Base total (no add-ons)", "基本合計（未含附加項目）"),
-        withAddons: T("Tổng có add-on", "Total with add-ons", "含附加項目合計"),
-        ecnIn: T("Gồm ECN Q4 cộng thêm <b>{v}</b>, MIB giữ 100%.", "Includes the Q4 ECN boost of <b>{v}</b>, kept 100% by the MIB.", "已含 ECN Q4 加碼 <b>{v}</b>，MIB 全額保留。"),
-        ecnNote: T("ECN Q4 ước tính trên net deposit toàn nhánh; TMGM tính theo khách trực tiếp của từng IB nên số thực có thể thấp hơn.", "The Q4 ECN boost is estimated on network net deposit; TMGM calculates it per IB on direct clients, so the actual amount may be lower.", "ECN Q4 以體系淨入金估算；TMGM 按各 IB 直客計算，實際金額可能較低。"),
-        ecnHint: T("Chọn tài khoản Edge để cộng thêm ECN Q4 (tới 5 USD/lot Forex, đến 31/12).", "Choose Edge to add the Q4 ECN boost (up to USD 5/lot on FX, until 31 Dec).", "選擇 Edge 帳戶即可加計 ECN Q4 加碼（外匯最高 5 美元/手，至 12 月 31 日）。"),
-        legend: T("xanh = cộng thêm · đỏ = chia ra", "green = added · red = paid out", "綠色 = 增加 · 紅色 = 分出"),
-        tier: T("Bậc đạt: {d} net deposit · {l} lot", "Tier reached: {d} net deposit · {l} lots", "已達級別：淨入金 {d} · {l} 手"),
-        noTier: T("Chưa đạt bậc đầu ({d} · {l} lot)", "Below the first tier ({d} · {l} lots)", "未達第一級（{d} · {l} 手）"),
-        nextTier: T("Lên bậc {r}: cần thêm {need}.", "To reach the {r} tier: {need} more.", "升至 {r} 級別還需：{need}。"),
-        needLots: T("{l} lot", "{l} lots", "{l} 手"),
-        needDep: T("{d} net deposit", "{d} net deposit", "淨入金 {d}"),
-        and: T(" và ", " and ", " 及 "),
-        topTier: T("Đã đạt bậc cao nhất.", "Top tier reached.", "已達最高級別。"),
-        gross: T("Net deposit đã trừ rebate, nên tổng nạp trừ rút cần khoảng <b>{g}</b>.", "Net deposit is after rebates, so deposits minus withdrawals need to be about <b>{g}</b>.", "淨入金已扣除返傭，因此入金減出金需約 <b>{g}</b>。"),
-        noSwap: T("Chưa tính hoàn swap.", "Swap rebates not included.", "未計入隔夜利息返還。"),
-        notes: T(
-          "“Thưởng KM gấp đôi phần rebate MIB giữ lại; đây là lý do nên đăng ký đúng chương trình MIB.”<br>Mời đối tác nhập số thực của hệ thống (đã hỏi ở slide 1) vào ô “Số của anh/chị”. Add-on mặc định tắt: chọn Edge rồi bật ECN Q4, hoặc bật Hoàn swap để thấy phần cộng thêm.",
-          "“The promo bonus is double what the MIB keeps from rebates — that's why registering for the right MIB program matters.”<br>Invite the partner to enter their real network numbers (asked on slide 1) under “Your numbers”. Add-ons are off by default: choose Edge and switch on the Q4 ECN boost, or switch on the swap rebate, to show the extras.",
-          "「活動獎金是 MIB 保留返傭的兩倍，這就是為什麼要報名正確的 MIB 計劃。」<br>請合作夥伴在「您的數據」中輸入體系的真實數字（第 1 頁已詢問）。附加項目預設關閉：選擇 Edge 並開啟 ECN Q4 加碼，或開啟隔夜利息返還，即可顯示額外收入。"
-        ),
-      },
 
-      "so-sanh": {
-        part: "mib",
-        label: T("So sánh", "Compare", "比較"),
-        title: T("So tổng thu nhập, không so một dòng rebate", "Compare total income, not a single rebate line", "比較總收入，而不是單一返傭"),
-        clsLabel: T("Nhóm tài khoản", "Account group", "帳戶類別"),
-        std: T("Standard", "Standard", "Standard"),
-        raw: T("Raw/ECN", "Raw/ECN", "Raw/ECN"),
-        legendKeep: T("Rebate MIB giữ lại", "Rebate the MIB keeps", "MIB 保留返傭"),
-        legendPromo: T("KM / thưởng của sàn", "Broker promo / reward", "平台活動／獎勵"),
-        legendEcn: T("ECN Q4", "Q4 ECN boost", "ECN Q4 加碼"),
-        meta: T("Rebate {r} · khách trả {c} USD/lot (FX/vàng)", "Rebate {r} · client pays {c} USD/lot (FX/gold)", "返傭 {r} · 客戶每手成本 {c} 美元（外匯／黃金）"),
-        counting: T("Đang tính:", "Counting:", "目前計入："),
-        tagMibPromo: T("KM MIB", "MIB promo", "MIB 活動"),
-        tagEcn: T("ECN Q4", "Q4 ECN", "ECN Q4"),
-        noSwap: T(
-          "Hoàn swap không tính ở bảng này: khách của 5 trong 7 sàn khảo sát và của VT Markets có thể dùng tài khoản swap-free, khách TMGM thì không.",
-          "Swap rebates are not counted here: clients at 5 of the 7 surveyed brokers and at VT Markets can use swap-free accounts, TMGM clients can't.",
-          "此表不計隔夜利息返還：調查的 7 家平台中有 5 家及 VT Markets 的客戶可使用免隔夜利息帳戶，TMGM 客戶則不能。"
-        ),
-        notesFold: T("Ghi chú và nguồn", "Notes and sources", "說明與來源"),
-        viewLabel: T("Cách xem", "View", "檢視方式"),
-        viewRank: T("Xếp hạng", "Ranking", "排名"),
-        viewH2h: T("Đối đầu", "Head-to-head", "對決"),
-        h2hAccount: T("Tài khoản TMGM", "TMGM account", "TMGM 帳戶"),
-        h2hBroker: T("Sàn so sánh", "Compare with", "比較平台"),
-        h2hGroup: T("Nhóm tài khoản", "Account group", "帳戶類別"),
-        h2hRateFx: T("Rebate FX (USD/lot)", "FX rebate (USD/lot)", "外匯返傭（美元/手）"),
-        h2hRateGold: T("Rebate vàng (USD/lot)", "Gold rebate (USD/lot)", "黃金返傭（美元/手）"),
-        h2hExtra: T("Thưởng thêm mỗi tháng (USD)", "Extra monthly bonus (USD)", "每月額外獎金（美元）"),
-        h2hEcn: T("Cộng ECN Q4 (chỉ Edge)", "Add Q4 ECN (Edge only)", "加入 ECN Q4（僅 Edge）"),
-        h2hCopy: T("Copy số từ TMGM", "Copy TMGM numbers", "複製 TMGM 數字"),
-        h2hMonthly: T("USD / tháng", "USD / month", "美元／月"),
-        h2hSub: T("Sub-IB nhận {v}", "Sub-IBs get {v}", "子代理獲得 {v}"),
-        h2hCostUs: T("Khách trả {c} USD/lot (FX/vàng) · ≈{n} sau Points", "Client pays {c} USD/lot (FX/gold) · ≈{n} after Points", "客戶每手成本 {c} 美元（外匯／黃金）· 扣點數後 ≈{n}"),
-        h2hCost: T("Khách trả {c} USD/lot (FX/vàng)", "Client pays {c} USD/lot (FX/gold)", "客戶每手成本 {c} 美元（外匯／黃金）"),
-        h2hNoCost: T("Chưa có số chi phí khách", "No client cost data yet", "尚無客戶成本數據"),
-        h2hAhead: T("{n} hơn", "{n} ahead", "{n} 領先"),
-        h2hEqual: T("Bằng nhau", "Even", "持平"),
-        h2hPerMonth: T("mỗi tháng", "per month", "每月"),
-        h2hNeedRate: T("Nhập rebate FX và vàng của {n} để so sánh.", "Enter {n}'s FX and gold rebates to compare.", "請輸入 {n} 的外匯與黃金返傭以進行比較。"),
-        h2hEmpty: T("Chưa có thu nhập", "No income yet", "尚無收入"),
-        h2hProfile: T("Năng lực của {n}", "What {n} offers", "{n} 的實力"),
-        h2hOther: T("Sàn khác (tự nhập số)", "Others (enter your own numbers)", "其他平台（自行輸入）"),
-        h2hOtherName: T("Tên sàn", "Broker name", "平台名稱"),
-        h2hOtherDefault: T("Sàn khác", "Other broker", "其他平台"),
-        h2hCostFx: T("Chi phí khách FX (USD/lot)", "Client cost FX (USD/lot)", "客戶外匯成本（美元/手）"),
-        h2hCostGold: T("Chi phí khách vàng (USD/lot)", "Client cost gold (USD/lot)", "客戶黃金成本（美元/手）"),
-        estTag: T("ước tính", "estimate", "估算"),
-        h2hNote: T(
-          "Mỗi bên nhập số riêng, không ảnh hưởng máy tính ở slide Ví dụ. Rebate của sàn khác lấy từ file khảo sát và sửa được; KM của sàn đó tính theo điều kiện trong khảo sát, cộng thêm ô Thưởng thêm. Vòng tròn chỉ gồm thu nhập MIB; phần Sub-IB ghi bên dưới.",
-          "Each side has its own numbers and doesn't change the Example calculator. The other broker's rebates come from the survey file and can be edited; its promo follows the survey terms, plus the Extra bonus field. Donuts show MIB income only; the Sub-IB share is listed below.",
-          "兩邊各自輸入數字，不影響「示例」頁的計算器。其他平台的返傭取自調查檔，可修改；其活動依調查條件計算，另加「額外獎金」欄。圓環只含 MIB 收入；子代理部分列於下方。"
-        ),
-        pointsNote: T(
-          "Dòng TMGM ghi thêm chi phí khách sau Points (trừ {r} USD/lot); chưa trừ chương trình điểm hoặc cashback cho khách của các sàn khác. Points không đổi thu nhập MIB.",
-          "The TMGM row also shows client cost after Points (minus USD {r}/lot); other brokers' client points or cashback schemes are not deducted. Points don't change MIB income.",
-          "TMGM 一列另列扣點數後的客戶成本（每手減 {r} 美元）；其他平台的客戶點數或現金回贈未扣除。點數不影響 MIB 收入。"
-        ),
-        pending: T("Đang cập nhật", "Updating", "更新中"),
-        pctRebate: T("{p}% chi phí khách ≈ {r}", "{p}% of client cost ≈ {r}", "客戶成本的 {p}% ≈ {r}"),
-        sync: T("Dùng chung số với slide Ví dụ.", "Shares the numbers with the Example slide.", "與「示例」頁共用數據。"),
-        only: T(
-          "<b>Trong 8 sàn khảo sát, chỉ TMGM có chương trình thưởng tháng riêng cho MIB.</b>",
-          "<b>Of the 8 brokers surveyed, only TMGM has a monthly bonus program built for MIBs.</b>",
-          "<b>在調查的 8 家平台中，只有 TMGM 設有 MIB 專屬月度獎金計劃。</b>"
-        ),
-        notCounted: T(
-          "Chi phí khách là số minh họa, spread thả nổi. Vantage Standard trả rebate theo % chi phí khách, quy đổi ra USD/lot. Thưởng trọn đời của Exness và Axi quy đổi ra USD/lot. Chưa tính: cashback 3 USD/lot 2 tháng đầu của AvaTrade, markup của PU Prime, hoàn swap.",
-          "Client costs are illustrative; spreads float. Vantage Standard pays rebates as a % of client cost, converted to USD/lot. Exness and Axi lifetime rewards are converted to USD/lot. Not counted: AvaTrade's USD 3/lot cashback for the first 2 months, PU Prime markup, swap rebates.",
-          "客戶成本為示例，點差浮動。Vantage Standard 按客戶成本百分比返傭，已折算為每手美元。Exness 與 Axi 的終身獎勵已折算為每手美元。未計入：AvaTrade 首 2 個月每手 3 美元現金回贈、PU Prime 加點、隔夜利息返還。"
-        ),
-        source: T(
-          "Nguồn: khảo sát 7 sàn khu vực Đông Nam Á của TMGM; XM: chương trình đối tác XM (10% hoa hồng Sub-IB); EC Markets, VT Markets: nguồn công khai, ước tính (xem cách Đối đầu).",
-          "Source: TMGM survey of 7 brokers in Southeast Asia; XM: XM partner program (10% of Sub-IB commissions); EC Markets, VT Markets: public sources, estimates (see Head-to-head).",
-          "來源：TMGM 東南亞 7 家平台調查；XM：XM 合作夥伴計劃（子代理佣金 10%）；EC Markets、VT Markets：公開資料，為估算（見「對決」）。"
-        ),
-        notes: T(
-          "“Anh/chị đừng so một dòng rebate. Cùng hệ thống này, đây là số MIB nhận mỗi tháng ở từng sàn.”<br>Phần xanh lá là KM: TMGM đứng đầu nhờ KM riêng cho MIB, không phải nhờ rebate gốc. Nói rõ cột chi phí khách: TMGM STD đắt hơn cho khách, Edge ở mức giữa. Bấm Standard / Raw/ECN để đổi nhóm tài khoản.",
-          "“Don't compare a single rebate line. For this same network, here's what the MIB earns each month at each broker.”<br>The green part is promo: TMGM leads because of its MIB promo, not its base rebate. Be upfront about client cost: TMGM STD costs clients more, Edge sits mid-pack. Click Standard / Raw/ECN to switch account group.",
-          "「不要只比一條返傭。同樣的體系，這是 MIB 在每家平台每月的收入。」<br>綠色部分是活動：TMGM 領先靠的是 MIB 專屬活動，而非基本返傭。請坦白說明客戶成本：TMGM STD 對客戶較貴，Edge 居中。點擊 Standard / Raw/ECN 切換帳戶類別。"
-        ),
-      },
 
-      ib: {
-        hidden: true, // ẩn khỏi trang theo yêu cầu (nội dung IB nằm trong slide KM, tab "KM tháng IB"); xóa dòng này để hiện lại
-        part: "ib",
-        label: T("IB", "IB", "IB"),
-        title: T("IB: đủ 5 khách là vào được chương trình thưởng tháng", "IB: five clients gets you into the monthly bonus", "IB：滿 5 位客戶即可參加月度獎金"),
-        photo: T("TP. Hồ Chí Minh về đêm, tháp Landmark 81 bên sông Sài Gòn", "Ho Chi Minh City at night, Landmark 81 beside the Saigon River", "夜晚的胡志明市，西貢河畔的 Landmark 81 大樓"),
-        cards: [
-          { icon: "users", num: T("5 khách", "5 clients", "5 位客戶"), label: T("3 khách hoạt động là đủ điều kiện", "3 active clients to qualify", "3 位活躍客戶即符合資格"), key: true },
-          { icon: "trophy", num: T("260–15.000 USD", "USD 260–15,000", "260–15,000 美元"), label: T("thưởng tháng theo net deposit và lot", "monthly bonus by net deposit and lots", "依淨入金與手數發放月度獎金") },
-          { icon: "moon", num: T("30% + tới 50%", "30% + up to 50%", "30% + 最高 50%"), label: T("hoàn Swap tuần và tháng", "weekly and monthly swap rebate", "每週及每月隔夜利息返還") },
-          { icon: "gift", num: T("Quà cho khách", "Client rewards", "客戶禮品"), label: T("Apple Watch → MacBook Pro, hoặc nhận 70% tiền mặt", "Apple Watch → MacBook Pro, or take 70% in cash", "Apple Watch → MacBook Pro，或領取 70% 現金") },
-        ],
-        details: T(
-          "Thưởng tháng từ 260 USD (net deposit 17.000 USD, 85 lot) đến 15.000 USD (500.000 USD, 2.200 lot), chỉ tính khách trực tiếp. Hoàn Swap 30% mỗi tuần, thêm 30%, 40% hoặc 50% mỗi tháng khi net deposit trên 5.000, 10.000 hoặc 30.000 USD. Quà cho khách từ Apple Watch (10.000 USD, 100 lot) đến MacBook Pro (50.000 USD, 550 lot).",
-          "Monthly bonus from USD 260 (USD 17,000 net deposit, 85 lots) to USD 15,000 (USD 500,000, 2,200 lots), direct clients only. Swap rebate of 30% weekly, plus 30%, 40% or 50% monthly when net deposit is over USD 5,000, 10,000 or 30,000. Client rewards from Apple Watch (USD 10,000, 100 lots) to MacBook Pro (USD 50,000, 550 lots).",
-          "月度獎金由 260 美元（淨入金 17,000 美元、85 手）至 15,000 美元（500,000 美元、2,200 手），僅計直客。隔夜利息每週返還 30%，淨入金超過 5,000、10,000 或 30,000 美元時，每月再返還 30%、40% 或 50%。客戶禮品由 Apple Watch（10,000 美元、100 手）至 MacBook Pro（50,000 美元、550 手）。"
-        ),
-        mibNote: T(
-          "Nếu MIB tham gia KM đặc biệt MIB, Sub-IB trong nhánh sẽ không nhận thưởng tháng riêng.",
-          "If the MIB joins the MIB special promo, Sub-IBs in its branch don't receive a separate monthly bonus.",
-          "若 MIB 參加 MIB 專屬活動，其分支內的子代理不會另外獲得月度獎金。"
-        ),
-        notes: T(
-          "“Đây là chính sách cho IB cá nhân.” Chi tiết gửi kèm tài liệu sau buổi gặp.",
-          "“This is the policy for individual IBs.” Send the details as a follow-up document after the meeting.",
-          "「這是個人 IB 的政策。」詳細內容會後以文件寄送。"
-        ),
-      },
 
       "uu-dai": {
         part: "common",
@@ -1160,7 +640,7 @@
         ptsRules: [
           T("Forex, vàng: 1 lot = 10 điểm · chỉ số, dầu, crypto: 10 lot = 10 điểm · cổ phiếu không tính", "FX, gold: 1 lot = 10 points · indices, oil, crypto: 10 lots = 10 points · shares excluded", "外匯、黃金：1 手 = 10 點 · 股指、原油、加密貨幣：10 手 = 10 點 · 股票不計"),
           T("Lệnh đã đóng, giữ ≥ 2 phút · điểm về ví hôm sau · không hết hạn", "Closed trades held ≥ 2 minutes · points land the next day · never expire", "持倉 ≥ 2 分鐘的已平倉訂單 · 次日入帳 · 永不過期"),
-          T("Tính theo portal, mọi loại tài khoản · chưa tự kích hoạt thì nhờ AM bật", "Counted per portal, all account types · if not auto-activated, ask your AM", "按 Portal 計算，不分帳戶類型 · 未自動啟用可請 AM 開通"),
+          T("Tính theo portal, mọi loại tài khoản · chưa tự kích hoạt thì nhờ BD bật", "Counted per portal, all account types · if not auto-activated, ask your BD", "按 Portal 計算，不分帳戶類型 · 未自動啟用可請 BD 開通"),
         ],
         cbTitle: T("Cashback Q4", "Q4 cashback", "Q4 現金回贈"),
         cbBadge: T("Tới 500 USD/khách", "Up to USD 500 per client", "每位客戶最高 500 美元"),
@@ -1211,18 +691,24 @@
       "km-khac": {
         part: "common",
         label: T("Ưu đãi khác", "More promotions", "其他優惠"),
-        title: T("Các ưu đãi phụ đang chạy", "Other promotions running now", "其他進行中的優惠"),
+        title: T("Các ưu đãi đang chạy cho khách", "Promotions running for clients now", "客戶進行中的優惠"),
         lead: T(
-          "Bấm từng dòng để xem điều kiện. Các ưu đãi này không tính vào số nào ở các slide trước.",
-          "Click a row to see the conditions. None of these are counted in the earlier slides.",
-          "點擊各列查看條件。以下優惠均未計入前面頁面的數字。"
+          "Mỗi thẻ là một ưu đãi. Bấm thẻ để mở trang đầy đủ: cách tham gia, điều kiện chính và mã QR của chương trình.",
+          "Each card is one promotion. Click a card for the full page: how to join, key conditions and the programme QR code.",
+          "每張卡片是一項優惠。點擊卡片可開啟完整頁面：參加方式、主要條件與活動 QR 碼。"
         ),
+        open: T("Mở trang ưu đãi đầy đủ", "Open the full promotions page", "開啟完整優惠頁面"),
         filterLabel: T("Lọc ưu đãi", "Filter promotions", "篩選優惠"),
         fAll: T("Tất cả", "All", "全部"),
         fSmall: T("Ưu đãi nhỏ", "Small offers", "小型優惠"),
         fMkt: T("Marketing", "Marketing", "行銷"),
+        fFollow: T("Đang hoàn tất", "Wrapping up", "收尾中"),
         private: T("Chỉ chia sẻ riêng", "Private only", "僅限私下分享"),
-        showPrivate: T("Hiện mục chỉ chia sẻ riêng ({n})", "Show private-only ({n})", "顯示僅限私下分享（{n}）"),
+        privateHint: T(
+          "Còn ưu đãi chỉ chia sẻ riêng (vé concert, Premier League…) dành cho đối tác có mã truy cập.",
+          "More private-only offers (concert and Premier League tickets…) are for partners with an access code.",
+          "另有僅限私下分享的優惠（演唱會、英超門票等），僅供持有存取碼的合作夥伴查看。"
+        ),
         privateWarn: T(
           "Mục “Chỉ chia sẻ riêng”: chỉ nói riêng với khách hoặc IB đủ điều kiện, không đăng mạng xã hội. Vé có hạn, không đổi tiền, không chuyển nhượng. Không in ra PDF.",
           "“Private only” items: share only privately with eligible clients or IBs, never on social media. Tickets are limited, not exchangeable for cash, not transferable. Not included when printing.",
@@ -1232,12 +718,14 @@
         left: T("còn {n} ngày", "{n} days left", "剩 {n} 天"),
         lastDay: T("hôm nay là ngày cuối", "last day today", "今天截止"),
         from: T("từ {d}", "from {d}", "{d} 起"),
-        link: T("Trang chương trình", "Promotion page", "活動頁面"),
+        closed: T("Đã đóng đăng ký · hạn {d}", "Registration closed · until {d}", "已截止報名 · 至 {d}"),
+        see: T("Xem trang đầy đủ", "See the full page", "查看完整頁面"),
+        count: T("{n} ưu đãi", "{n} promotions", "{n} 項優惠"),
         empty: T("Không còn ưu đãi nào trong mục này.", "No promotions left in this group.", "此分類暫無優惠。"),
         shared: T(
-          "Các khuyến mãi online không dùng chung nạp và lot với nhau; khuyến mãi online và offline (qua AM) dùng chung được nếu T&C không cấm. Tài khoản Cent chỉ tính net deposit.",
-          "Online promotions can't share deposits or lots with each other; online and offline (via AM) promotions can, unless the T&C says otherwise. Cent accounts count net deposit only.",
-          "線上活動之間不可共用入金與手數；線上與線下（經 AM）活動除條款另有規定外可共用。美分帳戶只計淨入金。"
+          "Các khuyến mãi online không dùng chung nạp và lot với nhau; khuyến mãi online và offline (qua BD) dùng chung được nếu T&C không cấm. Tài khoản Cent chỉ tính net deposit.",
+          "Online promotions can't share deposits or lots with each other; online and offline (via BD) promotions can, unless the T&C says otherwise. Cent accounts count net deposit only.",
+          "線上活動之間不可共用入金與手數；線上與線下（經 BD）活動除條款另有規定外可共用。美分帳戶只計淨入金。"
         ),
         source: T(
           "Nguồn: TMGM Sales Zendesk, Weekly Update 28/09–04/10/2026 và T&C từng chương trình (kiểm tra 09/10/2026). Mục hết hạn tự ẩn.",
@@ -1245,9 +733,9 @@
           "來源：TMGM Sales Zendesk、2026/9/28–10/4 每週更新及各活動條款（2026/10/9 核對）。過期項目自動隱藏。"
         ),
         notes: T(
-          "“Ngoài các khoản chính, TMGM còn nhiều ưu đãi nhỏ giúp đội sales chốt khách.”<br>Chỉ mở dòng nào đối tác hỏi. Khách mới: Rocket, Halloween, Gadget. Vé concert/Premier League chỉ nói riêng, không đưa lên mạng xã hội.",
-          "“Beyond the main streams, TMGM runs smaller offers that help your sales team close.”<br>Only open the rows the partner asks about. New clients: Rocket, Halloween, Gadget. Concert and Premier League tickets are private only, never on social media.",
-          "「除主要收入外，TMGM 還有不少小型優惠幫助業務成交。」<br>只展開合作夥伴問到的項目。新客戶：Rocket、萬聖節、Gadget。演唱會與英超門票僅限私下分享，不得發布到社群媒體。"
+          "“Ngoài các khoản chính, TMGM còn nhiều ưu đãi nhỏ giúp đội sales chốt khách.”<br>Chỉ mở thẻ nào đối tác hỏi. Khách mới: Rocket, Halloween, Gadget. Vé concert/Premier League chỉ nói riêng với đối tác có mã, không đưa lên mạng xã hội.",
+          "“Beyond the main streams, TMGM runs smaller offers that help your sales team close.”<br>Only open the cards the partner asks about. New clients: Rocket, Halloween, Gadget. Concert and Premier League tickets are for partners with a code only, never on social media.",
+          "「除主要收入外，TMGM 還有不少小型優惠幫助業務成交。」<br>只開啟合作夥伴問到的卡片。新客戶：Rocket、萬聖節、Gadget。演唱會與英超門票僅供持有存取碼的合作夥伴，不得發布到社群媒體。"
         ),
       },
       "bat-dau": {
@@ -1270,7 +758,7 @@
               ib: T("Đạt 5 khách trực tiếp, trong đó 3 khách hoạt động", "Reach 5 direct clients, 3 of them active", "達到 5 位直客，其中 3 位活躍"),
             },
           },
-          { icon: "file", when: T("Cuối tháng", "Month end", "月底"), what: T("AM nộp đơn KM", "Your AM files the promo claim", "AM 提交活動申請") },
+          { icon: "file", when: T("Cuối tháng", "Month end", "月底"), what: T("BD nộp đơn KM", "Your BD files the promo claim", "BD 提交活動申請") },
           { icon: "coins", when: T("Đầu tháng sau", "Early next month", "下月初"), what: T("ECN Q4 về trong 5 ngày làm việc, Swap tháng trước ngày 14, thưởng tháng trong 14 ngày làm việc sau duyệt", "Q4 ECN within 5 working days, monthly swap before the 14th, bonus within 14 working days of approval", "ECN Q4 於 5 個工作日內發放，隔夜利息於 14 日前，月度獎金於審核後 14 個工作日內") },
         ],
         firstPay: T("Khoản tiền đầu tiên", "First payout", "第一筆收入"),
@@ -1281,67 +769,6 @@
         ),
       },
 
-      faq: {
-        hidden: true, // ẩn khỏi trang; xóa dòng này để hiện lại
-        part: "qa",
-        label: T("Hỏi đáp", "Q&A", "問答"),
-        title: T("Câu hỏi thường gặp", "Common questions", "常見問題"),
-        upfrontTitle: T("Nói trước để minh bạch", "Upfront, for transparency", "事先說明，保持透明"),
-        upfront: [
-          T("Khách Việt Nam mở tài khoản qua Trademax Global Limited (VFSC), không phải pháp nhân ASIC; khách ASIC không được tham gia khuyến mãi.", "Vietnamese clients open accounts with Trademax Global Limited (VFSC), not the ASIC entity; ASIC clients are excluded from promotions.", "越南客戶透過 Trademax Global Limited（VFSC）開戶，而非 ASIC 監管實體；ASIC 客戶不參與活動。"),
-          T("Điều kiện khuyến mãi chặt: net deposit bị trừ cả rút tiền lẫn rebate, lệnh phải giữ từ 2 phút, IB cần tối thiểu 5 khách trực tiếp (3 khách hoạt động).", "Promo conditions are strict: net deposit deducts both withdrawals and rebates, trades must be held 2+ minutes, and IBs need at least 5 direct clients (3 active).", "活動條件嚴格：淨入金會扣除出金與返傭，訂單需持倉 2 分鐘以上，IB 至少需要 5 位直客（3 位活躍）。"),
-          T("TMGM có quyền thay đổi hoặc dừng chương trình bất kỳ lúc nào; rebate cơ bản mới là phần thu nhập “sàn”, khuyến mãi là phần cộng thêm.", "TMGM may change or end any program at any time; the base rebate is your income floor, promotions are the upside.", "TMGM 有權隨時變更或終止任何活動；基本返傭才是收入底線，活動是額外收益。"),
-        ],
-        items: [
-          {
-            q: T("MIB có cần văn phòng thật không?", "Does an MIB need a real office?", "MIB 需要實體辦公室嗎？"),
-            a: T("Có, với KM đặc biệt MIB (hợp đồng thuê, địa chỉ, ảnh nhân viên). Chưa có văn phòng thì dùng KM IB.", "Yes, for the MIB special promo (lease, address, staff photos). Without an office, use the IB promo.", "需要，若參加 MIB 專屬活動（租約、地址、員工照片）。沒有辦公室則使用 IB 活動。"),
-            internal: T(" Có thể gộp nhánh với ngưỡng lot tăng 50%.", " Branches can be combined with lot thresholds raised 50%.", " 可合併分支，手數門檻提高 50%。"),
-            refs: ["m2", "m3"],
-          },
-          {
-            q: T("Sàn khác trả rebate cao hơn.", "Another broker pays a higher rebate.", "其他平台返傭更高。"),
-            a: T("So tổng thu nhập của cả hệ thống, không so một dòng. Mời đối tác nhập số thật vào máy tính ở M5.", "Compare total income across the whole network, not a single line. Have the partner enter real numbers in the M5 calculator.", "比較整個體系的總收入，而不是單一項目。請合作夥伴在 M5 計算器輸入真實數據。"),
-            refs: ["nam-dong", "m5"],
-          },
-          {
-            q: T("Sub-IB của tôi được gì?", "What do my Sub-IBs get?", "我的子代理能得到什麼？"),
-            a: T("Rebate do MIB chia theo thỏa thuận; Sub-IB dùng quà cho khách để chốt khách. Khi MIB tham gia KM đặc biệt, Sub-IB không nhận thưởng tháng riêng.", "A rebate share agreed with the MIB; Sub-IBs use client rewards to close clients. When the MIB joins the special promo, Sub-IBs don't get a separate monthly bonus.", "由 MIB 按約定分配返傭；子代理可用客戶禮品促成交易。MIB 參加專屬活動時，子代理不另外獲得月度獎金。"),
-            refs: ["m3", "ib"],
-          },
-          {
-            q: T("Khách Việt có được ASIC bảo vệ không?", "Are Vietnamese clients protected by ASIC?", "越南客戶受 ASIC 保護嗎？"),
-            a: T("Nói thẳng: khách Việt thuộc Trademax Global Limited (VFSC 40356), không phải pháp nhân ASIC. Tập đoàn có AFSL 436416 và bảo hiểm trách nhiệm nghề nghiệp 10 triệu USD.", "Straight answer: Vietnamese clients are with Trademax Global Limited (VFSC 40356), not the ASIC entity. The group holds AFSL 436416 and USD 10M professional indemnity cover.", "坦白說：越南客戶屬於 Trademax Global Limited（VFSC 40356），而非 ASIC 監管實體。集團持有 AFSL 436416 及 1,000 萬美元專業責任保險。"),
-            refs: ["phap-ly"],
-          },
-          {
-            q: T("Điều kiện khuyến mãi khó quá.", "The promo conditions are too strict.", "活動條件太嚴格。"),
-            a: T("Bắt đầu bằng ECN Q4 (không cần số khách tối thiểu, không cần đăng ký) và hoàn Swap tuần (không có ngưỡng).", "Start with the Q4 ECN boost (no minimum clients, no sign-up) and the weekly swap rebate (no threshold).", "從 ECN Q4 加碼（無客戶數量要求、無需申請）和每週隔夜利息返還（無門檻）開始。"),
-            refs: ["ecn-q4", "ib"],
-          },
-          {
-            q: T("Tháng sau hết khuyến mãi thì sao?", "What happens when the promo ends?", "活動結束後怎麼辦？"),
-            a: T("Lập kế hoạch trên rebate cơ bản; khuyến mãi là phần cộng thêm. TMGM chạy khuyến mãi theo tháng và quý (T10, Q4) nhưng có quyền thay đổi.", "Plan on the base rebate; promotions are the upside. TMGM runs monthly and quarterly promos (Oct, Q4) but may change them.", "以基本返傭做規劃；活動是額外收益。TMGM 按月和季度推出活動（10 月、Q4），但有權變更。"),
-            refs: ["nam-dong", "bat-dau"],
-          },
-          {
-            q: T("Tôi đang làm đối tác cho sàn khác, chuyển khách sang được không?", "I partner with another broker — can I bring my clients over?", "我正在與其他平台合作，可以把客戶轉過來嗎？"),
-            a: T("Khách mới mở tài khoản qua IB link thì được. Không chuyển khách đang thuộc IB khác của TMGM để hưởng khuyến mãi: TMGM sẽ kiểm tra và có thể thu hồi (điều khoản ECN Q4, mục 2).", "New accounts opened through your IB link, yes. Moving clients who already belong to another TMGM IB to claim promos is not allowed — TMGM checks and may withhold cashback (Q4 ECN terms, term 2).", "透過您的 IB 連結新開戶的客戶可以。不得為獲取活動獎勵而轉移已屬於其他 TMGM 代理的客戶：TMGM 會審核並可能扣留返傭（ECN Q4 條款第 2 條）。"),
-            refs: ["ecn-q4"],
-          },
-          {
-            q: T("Bao lâu thì nhận được tiền?", "How soon do I get paid?", "多久能收到款項？"),
-            a: T("Xem lịch tiền về.", "See the payout schedule.", "請看入帳時間表。"),
-            refs: ["lich-tien"],
-          },
-          {
-            q: T("Khách của tôi chủ yếu scalping vàng.", "My clients mostly scalp gold.", "我的客戶主要做黃金剝頭皮。"),
-            a: T("Dùng Edge + ECN Q4: điều khoản ECN Q4 không đặt thời gian giữ lệnh tối thiểu. Lưu ý các KM khác (KM tháng IB/MIB, quà cho khách) chỉ tính lệnh giữ từ 2 phút và không tính lệnh hedging, nên khách scalping khó đạt các KM đó.", "Use Edge + the Q4 ECN boost: the Q4 ECN terms set no minimum holding time. Note that the other promos (monthly IB/MIB promo, client rewards) only count trades held 2+ minutes and exclude hedged trades, so scalping clients will struggle to qualify for those.", "使用 Edge + ECN Q4：ECN Q4 條款沒有設定最短持倉時間。但其他活動（IB/MIB 月度活動、客戶禮品）只計算持倉 2 分鐘以上的訂單，且不計對沖訂單，因此剝頭皮客戶較難達標。"),
-            refs: ["tai-khoan", "ecn-q4"],
-          },
-        ],
-        notes: T("Chuẩn bị sẵn 9 câu trả lời; mở đúng câu đối tác hỏi.", "Have all 9 answers ready; open the one the partner asks.", "準備好 9 個答案；打開合作夥伴問到的那一題。"),
-      },
     },
   };
 })();
