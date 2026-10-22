@@ -1,4 +1,6 @@
+﻿# Chỉ có trên máy này (không đẩy lên GitHub)
 .claude/
-dist/
 node_modules/
-.netlify/
+PLAN_*.md
+# Số liệu thật, mã truy cập và khóa nội dung: chỉ locked.js (đã mã hóa) được đẩy lên
+private/

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>TMGM · More promotions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="promos.css">
+<script>
+  // Nút sửa chỉ có khi mở trang với ?edit
+  var EDIT = /[?&]edit(=|&|$)/.test(location.search);
+  if (EDIT) document.write('<link rel="stylesheet" href="edits.css">');
+</script>
+</head>
+<body class="pp-page">
+<div id="app"></div>
+<noscript>This page needs JavaScript. / Trang này cần JavaScript. / 此頁面需要 JavaScript。</noscript>
+<script src="icons.js"></script>
+<script src="promos-data.js"></script>
+<script src="../dates.js"></script>
+<script src="../qr.js"></script>
+<script src="promo-art.js"></script>
+<script src="../locked.js"></script>
+<script src="../lock.js"></script>
+<script>
+  if (EDIT) document.write('<script src="edits-core.js"><\/script><script src="edits.js"><\/script>');
+</script>
+<script src="promos.js"></script>
+</body>
+</html>

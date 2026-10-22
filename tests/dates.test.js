@@ -163,3 +163,13 @@ test("promoStatus: chưa bắt đầu, đang chạy, sắp hết, ngày cuối, 
   assert.equal(Dt.promoStatus({ until: "2026-12-31" }, "2026-10-09").state, "active"); // thiếu from: coi như đã bắt đầu
   assert.throws(() => Dt.promoStatus({ until: "2026-13-01" }, "2026-10-09"), RangeError);
 });
+
+test("promoStatus với hạn đăng ký (regUntil): quá hạn đăng ký nhưng còn hạn hoàn tất thì 'closed'; hết hạn thì 'ended'", () => {
+  const p = { from: "2026-09-08", until: "2026-11-08", regUntil: "2026-10-08" }, st = (t) => ({ ...Dt.promoStatus(p, t) });
+  assert.equal(st("2026-09-07").state, "upcoming");
+  assert.equal(st("2026-10-08").state, "active"); // ngày cuối đăng ký vẫn đăng ký được
+  assert.deepEqual(st("2026-10-09"), { state: "closed", daysLeft: 30, level: "ok" });
+  assert.equal(st("2026-11-08").state, "closed");
+  assert.equal(st("2026-11-09").state, "ended");
+  assert.equal(Dt.promoStatus({ from: "2026-10-01", until: "2026-12-31" }, "2026-12-01").state, "active"); // không có regUntil: không bao giờ 'closed'
+});
