@@ -316,6 +316,7 @@
     }
   }
 
+  if (window.PP_OPEN) applyPrivate(window.PP_OPEN); // chế độ mở: không cần mã
   const first = location.hash.slice(1); // đọc trước khi render: render ghi lại hash của slide đang mở
   render();
   if (first) goKey(first); // link riêng: index.html#rocket (mục riêng đang ẩn thì ở lại bìa)

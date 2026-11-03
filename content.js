@@ -338,6 +338,81 @@
         ),
       },
 
+      "co-che": {
+        part: "common",
+        label: T("IB/MIB là gì", "How it works", "運作方式"),
+        title: T("IB và MIB: bạn giới thiệu khách, TMGM trả tiền theo từng lot", "IB and MIB: you refer clients, TMGM pays you on every lot", "IB 與 MIB：您介紹客戶，TMGM 按每手交易付款"),
+        roleLabel: T("Bạn là", "You are", "您是"),
+        roles: {
+          ib: {
+            tag: "IB",
+            full: T("Introducing Broker: người giới thiệu", "Introducing Broker: the referrer", "介紹經紀人：介紹客戶的人"),
+            def: T(
+              "Bạn không cần là trader. Bạn giới thiệu khách mở tài khoản TMGM bằng IB link của mình; khách giao dịch càng nhiều lot thì bạn nhận càng nhiều.",
+              "You don't need to trade. You refer clients to open TMGM accounts with your IB link, and the more lots they trade, the more you earn.",
+              "您不必是交易者。您以自己的 IB 連結介紹客戶開立 TMGM 帳戶，客戶交易的手數越多，您的收入越多。"
+            ),
+            gets: [
+              T("Rebate theo từng lot của khách trực tiếp, trả T+1", "A rebate on every lot your direct clients trade, paid T+1", "直客每手交易的返傭，T+1 發放"),
+              T("Thưởng tháng khi đủ khách, net deposit và lot (nộp qua BD)", "A monthly bonus once you have enough clients, net deposit and lots (claimed through your BD)", "客戶數、淨入金與手數達標時的月度獎金（透過 BD 申請）"),
+              T("Hoàn swap, và rebate ECN Q4 tăng thêm với tài khoản Edge", "Swap rebates, and the Q4 ECN boost on Edge accounts", "隔夜利息返還，以及 Edge 帳戶的 ECN Q4 加碼"),
+            ],
+          },
+          mib: {
+            tag: "MIB",
+            full: T("Master IB: quản lý mạng lưới Sub-IB", "Master IB: runs a network of Sub-IBs", "主代理（MIB）：管理子代理網絡"),
+            def: T(
+              "Bạn xây một mạng lưới: tuyển và hỗ trợ các Sub-IB, mỗi Sub-IB có khách riêng. TMGM trả rebate của cả nhánh cho bạn, bạn chia lại một phần cho Sub-IB.",
+              "You build a network: recruit and support Sub-IBs, each with its own clients. TMGM pays you the rebate of the whole branch and you pass part of it on to your Sub-IBs.",
+              "您建立一個網絡：招募並支援子代理，每位子代理有自己的客戶。TMGM 將整條分支的返傭付給您，您再分一部分給子代理。"
+            ),
+            gets: [
+              T("Rebate của cả nhánh: chia cho Sub-IB, phần còn lại bạn giữ", "The rebate of the whole branch: you share part with Sub-IBs and keep the rest", "整條分支的返傭：分一部分給子代理，其餘由您保留"),
+              T("Thưởng tháng MIB theo net deposit và lot của cả nhánh (MIB cần chứng minh có văn phòng)", "A monthly MIB bonus on the network's net deposit and lots (the MIB must show an office)", "依整個網絡淨入金與手數發放的 MIB 月度獎金（MIB 需證明擁有辦公室）"),
+              T("Hoàn swap và rebate ECN Q4 (tài khoản Edge) như IB", "Swap rebates and the Q4 ECN boost (Edge accounts), as for an IB", "與 IB 相同的隔夜利息返還與 ECN Q4 加碼（Edge 帳戶）"),
+            ],
+          },
+        },
+        nodes: {
+          tmgm: T("TMGM", "TMGM", "TMGM"),
+          ib: T("Bạn (IB)", "You (IB)", "您（IB）"),
+          mib: T("Bạn (MIB)", "You (MIB)", "您（MIB）"),
+          sub: T("Sub-IB", "Sub-IB", "子代理"),
+          clients: T("Khách", "Clients", "客戶"),
+          bonus: T("+ thưởng tháng", "+ monthly bonus", "+ 月度獎金"),
+        },
+        legend: [
+          T("Bạn giới thiệu khách bằng IB link", "You refer clients with your IB link", "您以 IB 連結介紹客戶"),
+          T("Khách nạp tiền và giao dịch; mỗi lot có một khoản rebate", "Clients deposit and trade; every lot carries a rebate", "客戶入金並交易；每手都有一筆返傭"),
+          T("TMGM trả rebate theo lot cho bạn, T+1", "TMGM pays you the rebate per lot, T+1", "TMGM 按手數向您支付返傭，T+1 到帳"),
+          T("MIB chia một phần rebate cho Sub-IB (tỷ lệ MIB tự thỏa thuận)", "The MIB passes part of the rebate to its Sub-IBs (a share the MIB agrees)", "MIB 將部分返傭分給子代理（比例由 MIB 自行約定）"),
+        ],
+        stepsTitle: T("Tiền về như thế nào", "How the money arrives", "收入如何到帳"),
+        steps: [
+          { icon: "link", what: T("Mở tài khoản đối tác và nhận IB link", "Open a partner account and get your IB link", "開立合作夥伴帳戶並取得 IB 連結") },
+          { icon: "user", what: T("Khách đăng ký bằng link, nạp tiền và giao dịch", "Clients sign up with the link, deposit and trade", "客戶經連結註冊、入金並交易") },
+          { icon: "coins", what: T("TMGM tính rebate theo lot và trả T+1 (không tính T7–CN)", "TMGM calculates the rebate per lot and pays T+1 (weekends excluded)", "TMGM 按手數計算返傭並於 T+1 發放（不含週末）") },
+          { icon: "trophy", what: T("Cuối tháng BD nộp đơn thưởng; hoàn swap và ECN Q4 được cộng thêm", "At month end your BD files the bonus claim; swap rebates and the Q4 ECN boost are added", "月底由 BD 提交獎金申請；另加隔夜利息返還與 ECN Q4 加碼") },
+        ],
+        moneyTitle: T("Ví dụ: một khách giao dịch 1 lot Forex", "Example: one client trades 1 lot of Forex", "示例：一位客戶交易 1 手外匯"),
+        accLabel: T("Loại tài khoản của khách", "Client's account type", "客戶的帳戶類型"),
+        paid: T("TMGM trả rebate", "TMGM pays the rebate", "TMGM 支付返傭"),
+        ibKeep: T("Bạn nhận", "You receive", "您獲得"),
+        subGets: T("Sub-IB nhận ({v}%)", "Sub-IBs receive ({v}%)", "子代理獲得（{v}%）"),
+        mibKeeps: T("MIB giữ lại", "The MIB keeps", "MIB 保留"),
+        moneyNote: T(
+          "Rebate theo bảng tài khoản TMGM; tỷ lệ chia do MIB tự thỏa thuận với Sub-IB. Chưa gồm thưởng tháng, hoàn swap và ECN Q4. Số minh họa, không phải cam kết thu nhập.",
+          "Rebates follow TMGM's account table; the split is agreed between the MIB and its Sub-IBs. Monthly bonus, swap rebates and the Q4 ECN boost are not included. Illustrative, not an income guarantee.",
+          "返傭依 TMGM 帳戶表；分成比例由 MIB 與子代理自行約定。未含月度獎金、隔夜利息返還與 ECN Q4。僅為示例，並非收入承諾。"
+        ),
+        more: T("Xem năm dòng thu nhập", "See the five income streams", "查看五條收入來源"),
+        notes: T(
+          "“Trước khi nói số, em muốn chắc anh/chị hiểu cơ chế: IB giới thiệu khách, TMGM trả rebate theo từng lot. MIB là IB cấp cao có Sub-IB, nhận rebate cả nhánh rồi chia lại.”<br>Bấm IB / MIB để đổi sơ đồ; chọn loại tài khoản để thấy 1 lot Forex trả bao nhiêu.",
+          "“Before any numbers, I want to be sure the mechanism is clear: an IB refers clients and TMGM pays a rebate on every lot. An MIB is a senior IB with Sub-IBs, who receives the whole branch's rebate and shares it back.”<br>Click IB / MIB to switch the diagram; pick an account type to see what 1 lot of Forex pays.",
+          "「談數字之前，我想先確認您理解運作方式：IB 介紹客戶，TMGM 按每手交易支付返傭。MIB 是有子代理的高階 IB，收取整條分支的返傭再分回去。」<br>點擊 IB / MIB 切換示意圖；選擇帳戶類型即可看到 1 手外匯的返傭。"
+        ),
+      },
+
       "nam-dong": {
         part: "common",
         label: T("Năm dòng thu nhập", "Five streams", "五條收入"),

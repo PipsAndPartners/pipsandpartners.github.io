@@ -86,6 +86,7 @@ function boot(opts = {}) {
     __MIB_TEST__: {},
   };
   if (opts.bundle) ctx.PP_LOCKED = opts.bundle;
+  if (opts.open) ctx.PP_OPEN = opts.open === true ? loadLocked() : opts.open; // chế độ mở: locked.js không mã hóa
   ctx.window = ctx;
   vm.createContext(ctx);
   for (const f of ["content.js", "calc.js", "dates.js", "contact.js", "qr.js", "promotions/promos-data.js", "lock.js"]) vm.runInContext(read(f), ctx, { filename: f });

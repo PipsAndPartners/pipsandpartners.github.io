@@ -12,8 +12,8 @@
   // Bản gốc (đang khóa) của các slide và dữ liệu số: giữ lại để "Khóa lại" khôi phục
   const LOCK_SECTIONS = ["m1", "m2", "m3", "m5", "so-sanh", "ib", "faq"], LOCK_DATA = ["mibTiers", "mibTierPresets", "ibTiers", "competitors"];
   const STUBS = Object.fromEntries(LOCK_SECTIONS.map((k) => [k, S[k]])), DATA0 = Object.fromEntries(LOCK_DATA.map((k) => [k, D[k]]));
-  const ORDER = ["bia", "phap-ly", "nam-dong", "tai-khoan", "ecn-q4", "ecn-calc", "lich-tien", "m1", "m2", "m3", "m4", "m5", "so-sanh", "ib", "uu-dai", "km-khac", "bat-dau", "faq"];
-  const RISK = new Set(["nam-dong", "tai-khoan", "ecn-q4", "ecn-calc", "m2", "m4", "m5", "so-sanh", "uu-dai", "km-khac", "bat-dau"]); // I1 tự đặt dòng rủi ro
+  const ORDER = ["bia", "phap-ly", "co-che", "nam-dong", "tai-khoan", "ecn-q4", "ecn-calc", "lich-tien", "m1", "m2", "m3", "m4", "m5", "so-sanh", "ib", "uu-dai", "km-khac", "bat-dau", "faq"];
+  const RISK = new Set(["co-che", "nam-dong", "tai-khoan", "ecn-q4", "ecn-calc", "m2", "m4", "m5", "so-sanh", "uu-dai", "km-khac", "bat-dau"]); // I1 tự đặt dòng rủi ro
   const LANGS = [["en", "EN"], ["vi", "VI"], ["zh", "中文"]];
   const LOCALE = { en: "en-US", vi: "vi-VN", zh: "zh-TW" };
   const app = document.getElementById("app");
@@ -73,6 +73,8 @@
     m5mode: (qs.get("a") || store.get("mib-aud")) === "ib" ? "ib" : "mib", ibc: ibDefaults(), ibAdd: { ecn: false, swap: false }, ibp: {},
     contact: { name: "", phone: "", email: "", note: "", status: "", errors: {} },
     regMenu: false,
+    // Slide "IB/MIB là gì": sơ đồ theo vai trò (mặc định theo đối tượng) và loại tài khoản của ví dụ 1 lot
+    how: { role: (qs.get("a") || store.get("mib-aud")) === "ib" ? "ib" : "mib", acc: "STD" },
     // Mã truy cập: chưa nhập đúng thì 3 slide (KM, Ví dụ, So sánh) chỉ hiện khung khóa
     unlocked: false, code: "", lockMsg: "",
     banner: true, first: true,
@@ -564,6 +566,62 @@
     return `<div class="otherp" data-step="5"><p class="otherp-h">${L(s.otherTitle)}</p><div class="otherp-row">${groups.map(([k, icon, label, items]) =>
       `<a class="otherp-card${k === "private" ? " otherp-card--private" : ""}" href="#km-khac" data-act="xp-jump" data-v="${k}"><span class="otherp-top">${ic(icon)}<b>${L(label)}</b><em>${items.length}</em></span>
         <small>${items.slice(0, 3).map((x) => L(x.p.name)).join(", ")}${items.length > 3 ? "…" : ""}</small></a>`).join("")}</div></div>`;
+  };
+
+  // ---------- slide "IB/MIB là gì": sơ đồ dòng tiền (SVG) + ví dụ 1 lot Forex ----------
+  const calmMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const howIcon = (name, x, y, size) => `<use href="#i-${name}" x="${x}" y="${y}" width="${size}" height="${size}"/>`;
+  const howNode = (x, y, w, h, label, cls, icon) => `<g class="how-node how-node--${cls}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14"/>${icon ? howIcon(icon, x + 12, y + h / 2 - 11, 22) : ""}<text x="${x + w / 2 + (icon ? 12 : 0)}" y="${y + h / 2 + 6}" text-anchor="middle">${label}</text></g>`;
+  const howUsers = (cx, y, n) => Array.from({ length: n }, (_, i) => howIcon("user", cx - (n * 22) / 2 + i * 22 + 2, y, 18)).join("");
+  const howBadge = (x, y, n) => `<g class="how-badge"><circle cx="${x}" cy="${y}" r="11"/><text x="${x}" y="${y + 5}" text-anchor="middle">${n}</text></g>`;
+  const howCoin = (path, delay) => (calmMotion() ? "" : `<circle class="how-coin" r="5"><animateMotion dur="2.6s" begin="${delay}s" repeatCount="indefinite" path="${path}"/></circle>`);
+  const howDefs = `<defs>${[["pay", "#8DC63F"], ["trade", "#0B1F4D"], ["refer", "#1F5FD6"]].map(([k, c]) => `<marker id="how-a-${k}" viewBox="0 0 10 10" refX="8" refY="5" markerUnits="userSpaceOnUse" markerWidth="13" markerHeight="13" orient="auto"><path d="M0 0L10 5L0 10z" fill="${c}"/></marker>`).join("")}</defs>`;
+  const howDiagram = (role) => {
+    const n = S["co-che"].nodes, edge = (k, d) => `<path class="how-e how-e--${k}" d="${d}" marker-end="url(#how-a-${k})"/>`;
+    if (role === "ib") {
+      const pay = "M208 44 C150 44 95 130 95 210";
+      return `<svg viewBox="0 0 560 290" role="img" aria-label="${esc(`${L(n.ib)} → ${L(n.clients)} → ${L(n.tmgm)} → ${L(n.ib)}`)}">${howDefs}
+        ${edge("refer", "M172 240 L386 240")}${edge("trade", "M470 210 C470 130 420 44 354 44")}${edge("pay", pay)}${howCoin(pay, 0)}${howCoin(pay, 1.3)}
+        ${howNode(210, 14, 140, 52, L(n.tmgm), "tmgm", "building")}${howNode(20, 212, 150, 56, L(n.ib), "you")}
+        <g class="how-node how-node--client"><rect x="390" y="212" width="150" height="56" rx="14"/>${howUsers(465, 220, 3)}<text x="465" y="258" text-anchor="middle">${L(n.clients)}</text></g>
+        ${howBadge(279, 240, 1)}${howBadge(437, 97, 2)}${howBadge(130, 97, 3)}</svg>`;
+    }
+    const subs = [90, 280, 470], payTop = "M280 58 L280 98", paySubs = subs.map((c) => `M280 152 C280 176 ${c} 172 ${c} 196`);
+    return `<svg viewBox="0 0 560 340" role="img" aria-label="${esc(`${L(n.tmgm)} → ${L(n.mib)} → ${L(n.sub)} → ${L(n.clients)}`)}">${howDefs}
+      ${subs.map((c) => edge("refer", `M${c} 244 L${c} 274`)).join("")}${edge("trade", "M530 298 C556 298 556 34 354 34")}
+      ${edge("pay", payTop)}${paySubs.map((d) => edge("pay", d)).join("")}${howCoin(payTop, 0)}${howCoin(paySubs[1], 1.2)}${howCoin(paySubs[0], 1.8)}
+      ${howNode(210, 10, 140, 48, L(n.tmgm), "tmgm", "building")}${howNode(195, 100, 170, 52, L(n.mib), "you")}
+      <g class="how-node how-node--bonus"><rect x="382" y="113" width="150" height="26" rx="13"/><text x="457" y="131" text-anchor="middle">${L(n.bonus)}</text></g>
+      ${subs.map((c) => howNode(c - 60, 198, 120, 46, L(n.sub), "sub")).join("")}
+      ${subs.map((c) => `<g class="how-node how-node--client"><rect x="${c - 60}" y="276" width="120" height="48" rx="14"/>${howUsers(c, 282, 2)}<text x="${c}" y="317" text-anchor="middle">${L(n.clients)}</text></g>`).join("")}
+      ${howBadge(90, 259, 1)}${howBadge(527, 166, 2)}${howBadge(298, 78, 3)}${howBadge(280, 175, 4)}</svg>`;
+  };
+  const howMoney = () => {
+    const s = S["co-che"], role = state.how.role, acc = D.accounts.find((a) => a.name === state.how.acc) || D.accounts[0], share = D.example.share;
+    const total = acc.fx, sub = (total * share) / 100, keep = total - sub, d = (v) => usd(v, Number.isInteger(v) ? 0 : 2);
+    const rows = role === "ib"
+      ? [["you", L(s.ibKeep), total, 100]]
+      : [["sub", fill(L(s.subGets), { v: share }), sub, share], ["you", L(s.mibKeeps), keep, 100 - share]];
+    return `<div class="how-money card" data-step="4"><h3>${ic("coins")} ${L(s.moneyTitle)}</h3>
+      <div class="how-acc"><span class="addons-l">${L(s.accLabel)}</span>${segBtns("how-acc", D.accounts.map((a) => [a.name, a.name]), acc.name, L(s.accLabel))}</div>
+      <p class="how-paid"><span>${ic("building")} ${L(s.paid)}</span><b>${d(total)}</b></p>
+      <div class="how-bar" role="img" aria-label="${esc(rows.map((r) => `${r[1]}: ${d(r[2])}`).join("; "))}">${rows.map(([k, , , pct]) => `<i class="how-seg how-seg--${k}" style="flex:${pct}"></i>`).join("")}</div>
+      <ul class="how-split">${rows.map(([k, label, v]) => `<li><i class="sw how-sw--${k}"></i><span>${label}</span><b>${d(v)}</b></li>`).join("")}</ul>
+      <p class="fine">${L(s.moneyNote)}</p></div>`;
+  };
+  R["co-che"] = () => {
+    const s = S["co-che"], role = state.how.role, r = s.roles[role], legend = s.legend.slice(0, role === "ib" ? 3 : 4);
+    return sec("co-che", `<div class="how-top"><span class="addons-l">${L(s.roleLabel)}</span>${segBtns("how-role", [["ib", "IB"], ["mib", "MIB"]], role, L(s.roleLabel))}</div>
+      <div class="how">
+        <div class="how-left card"><div class="how-diagram" data-step="0">${howDiagram(role)}</div>
+          <ol class="how-legend">${legend.map((t, i) => `<li><b>${i + 1}</b><span>${L(t)}</span></li>`).join("")}</ol></div>
+        <aside class="how-role card--navy mesh"><b class="how-tag">${r.tag}</b><h3>${L(r.full)}</h3><p>${L(r.def)}</p>
+          <ul class="elig how-gets">${r.gets.map((g) => `<li>${ic("check")}<span>${L(g)}</span></li>`).join("")}</ul></aside>
+      </div>
+      <h3 class="how-h">${L(s.stepsTitle)}</h3>
+      <ol class="how-steps">${s.steps.map((st, i) => `<li data-step="${i + 1}"><span class="how-step-ic">${ic(st.icon)}</span><em>${i + 1}</em><span>${L(st.what)}</span></li>`).join("")}</ol>
+      ${howMoney()}
+      ${visible().includes("nam-dong") ? `<p class="more-link"><a href="#nam-dong" data-go="nam-dong">${L(s.more)} →</a></p>` : ""}`, "mesh mesh--light");
   };
 
   R["nam-dong"] = () => {
@@ -1096,7 +1154,7 @@
       </div>
       <nav id="menu-panel" class="menu-panel"${state.menu ? "" : " hidden"} data-menu="1" aria-label="${esc(L(D.ui.menu))}">
         <div class="menu-grid">${items}</div>
-        <div class="menu-foot"><span>${L(D.ui.audience)}</span>${segBtns("aud", [["mib", "MIB"], ["ib", "IB"]], state.aud, L(D.ui.audience))}${state.unlocked ? `<button type="button" class="btn btn--ghost btn--sm" data-act="relock">${ic("lock")}<span>${L(D.ui.lock.relock)}</span></button>` : ""}</div>
+        <div class="menu-foot"><span>${L(D.ui.audience)}</span>${segBtns("aud", [["mib", "MIB"], ["ib", "IB"]], state.aud, L(D.ui.audience))}${state.unlocked && !window.PP_OPEN ? `<button type="button" class="btn btn--ghost btn--sm" data-act="relock">${ic("lock")}<span>${L(D.ui.lock.relock)}</span></button>` : ""}</div>
       </nav>
     </div><div class="top-progress" aria-hidden="true"><i style="width:${Math.round(((ids.indexOf(cur) + 1) / ids.length) * 100)}%"></i></div></header>`;
   };
@@ -1267,6 +1325,7 @@
     const id = visible()[state.idx];
     state.aud = v;
     state.m5mode = v === "ib" ? "ib" : "mib";
+    state.how.role = v === "ib" ? "ib" : "mib";
     store.set("mib-aud", v);
     state.idx = Math.max(0, visible().indexOf(id));
     state.menu = false;
@@ -1467,6 +1526,8 @@
           state.addons[v] = !state.addons[v];
           updateAddons();
           break;
+        case "how-role": state.how.role = v; refresh("co-che"); break;
+        case "how-acc": state.how.acc = v; refresh("co-che"); break;
         case "m5mode": state.m5mode = v; refresh("m5"); break;
         case "ib-addon":
           if (v === "ecn" && !ibEcnUsable()) break; // ECN chỉ dành cho Edge và khi Q4 còn hiệu lực
@@ -1615,6 +1676,8 @@
 
   // ---------- khởi động ----------
   // Đọc #id trước render(): khi trình bày, render() ghi hash của slide đang mở (#bia) đè lên
+  // Chế độ mở (scripts/lock.mjs --open): locked.js là bản không mã hóa (window.PP_OPEN), mở sẵn mọi slide, không cần mã
+  if (window.PP_OPEN) applyLocked(window.PP_OPEN);
   const si = visible().indexOf(location.hash.slice(1));
   render();
   state.first = false;

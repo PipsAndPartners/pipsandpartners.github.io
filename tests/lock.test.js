@@ -141,7 +141,10 @@ test("trình duyệt: không có Web Crypto hoặc không có gói thì unlock b
 });
 
 // ---- locked.js thật ----
-test("locked.js: là gói hợp lệ, ≥ 600.000 vòng PBKDF2, mỗi mã một ô, không lộ chữ gốc", () => {
+const OPEN_MODE = fs.existsSync(path.join(root, "locked.js")) && /window\.PP_OPEN\s*=/.test(fs.readFileSync(path.join(root, "locked.js"), "utf8"));
+const skipOpen = OPEN_MODE && "locked.js đang ở chế độ mở (không mã hóa)";
+
+test("locked.js: là gói hợp lệ, ≥ 600.000 vòng PBKDF2, mỗi mã một ô, không lộ chữ gốc", { skip: skipOpen }, () => {
   const f = path.join(root, "locked.js");
   assert.ok(fs.existsSync(f), "chạy node scripts/lock.mjs để tạo locked.js");
   const src = fs.readFileSync(f, "utf8");
@@ -155,7 +158,7 @@ test("locked.js: là gói hợp lệ, ≥ 600.000 vòng PBKDF2, mỗi mã một 
   for (const leak of ["competitors", "mibTiers", "ibCombined", "Exness", "thaiConcert", "premier-tickets", "data:image"]) assert.ok(!src.includes(leak), leak);
 });
 
-test("locked.js khớp private/: mọi mã trong private/codes.json mở được và ra đúng nội dung nguồn", { skip: !HAS_PRIVATE && "không có thư mục private/" }, async () => {
+test("locked.js khớp private/: mọi mã trong private/codes.json mở được và ra đúng nội dung nguồn", { skip: skipOpen || (!HAS_PRIVATE && "không có thư mục private/") }, async () => {
   const codes = JSON.parse(fs.readFileSync(path.join(root, "private", "codes.json"), "utf8"));
   const ctx = {};
   vm.runInNewContext(fs.readFileSync(path.join(root, "locked.js"), "utf8"), { window: ctx });

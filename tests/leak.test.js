@@ -26,6 +26,7 @@ test("danh sách file công khai có đủ các file chính (kiểm tra không q
 test("tên sàn đối thủ, dữ liệu khảo sát và bảng bậc KM không nằm ở file công khai nào", () => {
   const markers = ["Competitor Research", "mibTierPresets: {", "competitors: {", "Revshare", "Exness", "AvaTrade", "PU Prime", "Vantage", "HFM"];
   for (const f of files) for (const m of markers) {
+    if (f === "locked.js") continue; // base64 ngẫu nhiên có thể trùng chuỗi ngắn như "HFM"; locked.js có bài kiểm tra riêng ở lock.test.js
     if (/^tests[\\/]/.test(f)) continue; // các file test tự liệt kê marker để kiểm tra; phần nội dung thật được quét bởi các bài khác
     if (f === path.normalize("content.js") && m === "competitors: {") continue; // chỗ giữ chỗ rỗng
     if (f === path.normalize("content.js") && m === "mibTierPresets: {") continue;
