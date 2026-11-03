@@ -4,7 +4,7 @@ Trang tĩnh ba ngôn ngữ (English mặc định, Tiếng Việt, 繁體中文)
 
 | Trang | Địa chỉ | Nội dung |
 |---|---|---|
-| Pitch hợp tác | `/` | 14 slide: pháp lý, năm dòng thu nhập, tài khoản, ECN Q4, lịch tiền về, KM, ví dụ, so sánh, ưu đãi, liên hệ |
+| Pitch hợp tác | `/` | 15 slide: pháp lý, IB/MIB là gì (sơ đồ dòng tiền), năm dòng thu nhập, tài khoản, ECN Q4, lịch tiền về, KM, ví dụ, so sánh, ưu đãi, liên hệ |
 | Ưu đãi | `/promotions/` | Mỗi ưu đãi một slide: cách tham gia, điều kiện chính, link và QR chương trình |
 
 ## Chạy thử trên máy
@@ -27,7 +27,7 @@ Chỉ cần Node (không cài thêm gì). Máy có thư mục `private/` thì ch
 node --test "tests/*.test.js" "private/tests/*.test.js"
 ```
 
-Bộ công khai (`tests/`) kiểm tra: chức danh và WhatsApp (`bd`), mã hóa và khóa (`lock`, `lock-build`, `lock-ui`), không lộ nội dung đã khóa và không còn file cấu hình của nơi lưu trữ cũ (`leak`), slide Ưu đãi khác (`slide13`), trang ưu đãi (`promotions`), máy tính IB mới và add-on (`calc-ib`), QR (`qr`), ngày làm việc (`dates`), form liên hệ (`contact`), link đăng ký (`register`).
+Bộ công khai (`tests/`) kiểm tra: chức danh và WhatsApp (`bd`), slide IB/MIB là gì (`how`), mã hóa và khóa (`lock`, `lock-build`, `lock-ui`), không lộ nội dung đã khóa và không còn file cấu hình của nơi lưu trữ cũ (`leak`), slide Ưu đãi khác (`slide13`), trang ưu đãi (`promotions`), máy tính IB mới và add-on (`calc-ib`), QR (`qr`), ngày làm việc (`dates`), form liên hệ (`contact`), link đăng ký (`register`).
 
 ## Điều khiển
 
@@ -42,7 +42,7 @@ Bộ công khai (`tests/`) kiểm tra: chức danh và WhatsApp (`bd`), mã hóa
 
 ## Khóa bằng mã truy cập
 
-Ba slide **KM (08)**, **Ví dụ (10)**, **So sánh (11)** chỉ hiện khung nhập mã cùng nút liên hệ (WhatsApp, Telegram, email). Nhập đúng mã một lần là mở cả ba, trình duyệt nhớ lại; menu có nút **Khóa lại**. Một số ưu đãi chỉ chia sẻ riêng (vé concert, Premier League…) ở slide 13 và trang ưu đãi cũng chỉ hiện sau khi nhập mã.
+Ba slide **KM (09)**, **Ví dụ (11)**, **So sánh (12)** chỉ hiện khung nhập mã cùng nút liên hệ (WhatsApp, Telegram, email). Nhập đúng mã một lần là mở cả ba, trình duyệt nhớ lại; menu có nút **Khóa lại**. Một số ưu đãi chỉ chia sẻ riêng (vé concert, Premier League…) ở slide 13 và trang ưu đãi cũng chỉ hiện sau khi nhập mã.
 
 Trang là file tĩnh nên nội dung khóa được **mã hóa thật** (AES-256-GCM; mỗi mã là một ô bọc khóa nội dung qua PBKDF2) chứ không chỉ ẩn bằng JavaScript. Số liệu thật nằm trong `private/` (không đẩy lên GitHub); chỉ `locked.js` (đã mã hóa) được đẩy lên.
 
@@ -64,7 +64,7 @@ node scripts/lock.mjs --rotate              # đổi khóa nội dung, giữ m�
 
 Mỗi lần sửa số thì chạy lại `lock.mjs` rồi đẩy `locked.js`. Lưu ý: mọi thứ từng đẩy lên GitHub trước đây vẫn nằm trong lịch sử repo; khóa chỉ bảo vệ từ lần đẩy kế tiếp.
 
-## Slide 10: MIB và IB mới
+## Slide 11: MIB và IB mới
 
 Công tắc **Mô hình** đầu slide: *MIB có Sub-IB* (chia rebate cho Sub-IB, thưởng KM MIB) hoặc *IB mới* (chỉ khách trực tiếp: rebate + thưởng KM tháng IB, cần ≥ 5 khách kích hoạt trong đó ≥ 3 hoạt động). Cả hai có add-on ECN Q4 (chỉ Edge) và hoàn swap, mặc định tắt.
 
@@ -73,7 +73,7 @@ Chế độ IB mới có thêm khung **Ưu đãi khác (add-on)**: mỗi ưu đ�
 ## Trang ưu đãi (`/promotions/`)
 
 - Dữ liệu ở `promotions/promos-data.js` (biến `window.PROMOS`). `from`/`until` là ngày bắt đầu và hết hạn: hết hạn thì tự ẩn. `hidden: true` để ẩn tay. Ưu đãi đã đóng đăng ký nhưng còn hoàn tất dùng nhóm `followup` kèm `regUntil`.
-- Slide 13 của trang pitch lấy cùng dữ liệu này (một nguồn), mỗi thẻ dẫn tới đúng ưu đãi: `/promotions/?lang=vi#halloween`.
+- Slide 14 của trang pitch lấy cùng dữ liệu này (một nguồn), mỗi thẻ dẫn tới đúng ưu đãi: `/promotions/?lang=vi#halloween`.
 - **Sửa nội dung**: mở `/promotions/?edit` để thử chỉnh và xem trước (nút Sửa slide, Thêm slide, Xóa slide, ngăn "Dữ liệu…"). Bản sửa chỉ lưu trong trình duyệt của bạn; muốn đưa lên web thì tải bản sao lưu JSON ở "Dữ liệu…" rồi cập nhật `promos-data.js` và đẩy lên GitHub.
 - Ảnh bảng của TMGM: `pics: [{ src: "img/xxx.png", alt }]`; chép ảnh vào `promotions/img/`.
 
