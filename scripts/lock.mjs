@@ -3,6 +3,7 @@
 //   node scripts/lock.mjs                      tạo lại locked.js; tạo mã cho mục chưa có mã trong private/codes.json
 //   node scripts/lock.mjs --add "Tên đối tác"  thêm một mã mới cho đối tác đó
 //   node scripts/lock.mjs --revoke "Tên"       xóa mã của đối tác đó và đổi khóa nội dung (người đã nhập mã phải nhập lại)
+//   node scripts/lock.mjs --open               KHÔNG mã hóa: locked.js chứa nội dung thật, mọi người thấy hết, không cần mã (chạy lại không có --open để khóa lại)
 //   node scripts/lock.mjs --rotate             đổi khóa nội dung (mọi người phải nhập lại mã)
 //
 // private/ không được đẩy lên GitHub (.gitignore): chứa locked-source.json (số thật), codes.json (tên ↔ mã), lock-state.json (khóa nội dung).
@@ -36,10 +37,17 @@ function inlineImages(node, root) {
 export async function build(opts = {}) {
   const root = opts.root || path.join(here, "..");
   const priv = path.join(root, "private");
+  const out = opts.out || path.join(root, "locked.js");
   const srcFile = path.join(priv, "locked-source.json"), codesFile = path.join(priv, "codes.json"), stateFile = path.join(priv, "lock-state.json");
   if (!fs.existsSync(srcFile)) throw new Error(`Thiếu ${srcFile}`);
   const source = JSON.parse(fs.readFileSync(srcFile, "utf8"));
   inlineImages(source, root);
+  if (opts.open) {
+    fs.writeFileSync(out, `/* CHẾ ĐỘ MỞ: nội dung KHÔNG mã hóa, ai cũng đọc được. Tạo bằng scripts/lock.mjs --open; chạy lại không có --open để khóa. */
+window.PP_OPEN = ${JSON.stringify(source)};
+`);
+    return { open: true, codes: [], out, bundle: { slots: {} }, rotated: false };
+  }
 
   let codes = readJson(codesFile, DEFAULT_NAMES.map((name) => ({ name })));
   if (opts.add) codes.push({ name: opts.add });
@@ -60,7 +68,6 @@ export async function build(opts = {}) {
 
   writeJson(codesFile, codes);
   writeJson(stateFile, { contentKey: Lock.toB64(key), rotatedAt: rotate || !state ? new Date().toISOString() : state.rotatedAt });
-  const out = opts.out || path.join(root, "locked.js");
   fs.writeFileSync(out, `/* Nội dung đã mã hóa (AES-GCM). Tạo bằng scripts/lock.mjs, không sửa tay. */\nwindow.PP_LOCKED = ${JSON.stringify(bundle)};\n`);
   return { bundle, codes, out, rotated: rotate || !state };
 }
@@ -68,7 +75,8 @@ export async function build(opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const a = process.argv.slice(2), val = (f) => { const i = a.indexOf(f); return i >= 0 ? a[i + 1] : undefined; };
   try {
-    const r = await build({ add: val("--add"), revoke: val("--revoke"), rotate: a.includes("--rotate") });
+    const r = await build({ add: val("--add"), revoke: val("--revoke"), rotate: a.includes("--rotate"), open: a.includes("--open") });
+    if (r.open) { console.log(`Đã tạo ${path.relative(process.cwd(), r.out)} ở CHẾ ĐỘ MỞ: mọi slide và ưu đãi hiện cho tất cả mọi người, không cần mã.`); process.exit(0); }
     console.log(`Đã tạo ${path.relative(process.cwd(), r.out)} (${Object.keys(r.bundle.slots).length} mã${r.rotated ? ", đã đổi khóa nội dung" : ""}).`);
     console.log("\nMã truy cập (lưu trong private/codes.json, đổi tên cho đúng đối tác):");
     for (const c of r.codes) console.log(`  ${c.name.padEnd(18)} ${c.code}`);

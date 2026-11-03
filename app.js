@@ -1154,7 +1154,7 @@
       </div>
       <nav id="menu-panel" class="menu-panel"${state.menu ? "" : " hidden"} data-menu="1" aria-label="${esc(L(D.ui.menu))}">
         <div class="menu-grid">${items}</div>
-        <div class="menu-foot"><span>${L(D.ui.audience)}</span>${segBtns("aud", [["mib", "MIB"], ["ib", "IB"]], state.aud, L(D.ui.audience))}${state.unlocked ? `<button type="button" class="btn btn--ghost btn--sm" data-act="relock">${ic("lock")}<span>${L(D.ui.lock.relock)}</span></button>` : ""}</div>
+        <div class="menu-foot"><span>${L(D.ui.audience)}</span>${segBtns("aud", [["mib", "MIB"], ["ib", "IB"]], state.aud, L(D.ui.audience))}${state.unlocked && !window.PP_OPEN ? `<button type="button" class="btn btn--ghost btn--sm" data-act="relock">${ic("lock")}<span>${L(D.ui.lock.relock)}</span></button>` : ""}</div>
       </nav>
     </div><div class="top-progress" aria-hidden="true"><i style="width:${Math.round(((ids.indexOf(cur) + 1) / ids.length) * 100)}%"></i></div></header>`;
   };
@@ -1676,6 +1676,8 @@
 
   // ---------- khởi động ----------
   // Đọc #id trước render(): khi trình bày, render() ghi hash của slide đang mở (#bia) đè lên
+  // Chế độ mở (scripts/lock.mjs --open): locked.js là bản không mã hóa (window.PP_OPEN), mở sẵn mọi slide, không cần mã
+  if (window.PP_OPEN) applyLocked(window.PP_OPEN);
   const si = visible().indexOf(location.hash.slice(1));
   render();
   state.first = false;

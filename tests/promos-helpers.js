@@ -69,6 +69,7 @@ function boot(opts = {}) {
     __MIB_TEST__: {},
   };
   if (opts.bundle) ctx.PP_LOCKED = opts.bundle;
+  if (opts.open) ctx.PP_OPEN = { promos: privatePromos() }; // chế độ mở: locked.js không mã hóa
   ctx.window = ctx;
   vm.createContext(ctx);
   const files = opts.files || ["promos-data.js", "../dates.js", "../qr.js", "promo-art.js", "../lock.js", "edits-core.js", "edits.js"];
