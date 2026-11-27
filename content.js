@@ -844,6 +844,90 @@
         ),
       },
 
+      // Slide 16: quốc gia và vùng lãnh thổ TMGM chưa hỗ trợ. Thêm/bớt nước: sửa `regions` (số trên tiêu đề tự đếm).
+      // alias: tên gọi khác để ô tìm kiếm nhận ra, cách nhau bằng dấu phẩy. Tiếng Việt viết có dấu (gõ không dấu vẫn tìm được).
+      "khong-ho-tro": {
+        part: "close",
+        label: T("Không hỗ trợ", "Not supported", "不支援地區"),
+        title: T("{n} quốc gia và vùng lãnh thổ chưa được hỗ trợ", "{n} countries and regions not supported", "暫不支援的 {n} 個國家及地區"),
+        lead: T(
+          "TMGM chưa nhận khách cư trú tại các quốc gia và vùng lãnh thổ dưới đây. Kiểm tra nơi cư trú của khách trước khi giới thiệu.",
+          "TMGM doesn't accept clients residing in the countries and regions below. Check where a client lives before you refer them.",
+          "TMGM 暫不接受居住於以下國家及地區的客戶。介紹客戶前，請先確認其居住地。"
+        ),
+        searchLabel: T("Kiểm tra quốc gia của khách", "Check a client's country", "查詢客戶所在國家"),
+        placeholder: T("Ví dụ: Nhật Bản, Singapore…", "e.g. Japan, Singapore…", "例如：日本、新加坡…"),
+        hint: T("Gõ tên nước bằng tiếng Việt, tiếng Anh hoặc tiếng Trung.", "Type a country name in English, Vietnamese or Chinese.", "可輸入中文、英文或越南文國名。"),
+        hit: T("Không hỗ trợ: {c}", "Not supported: {c}", "不支援：{c}"),
+        miss: T("“{q}” không có trong danh sách này.", "“{q}” is not on this list.", "「{q}」不在此名單中。"),
+        ask: T(
+          "Chưa chắc khách cư trú ở đâu? Hỏi BD trước khi khách mở tài khoản.",
+          "Not sure where a client lives? Ask your BD before they open an account.",
+          "不確定客戶居住地？請在開戶前先詢問 BD。"
+        ),
+        regions: [
+          {
+            name: T("Châu Á", "Asia", "亞洲"),
+            countries: [
+              { name: T("Afghanistan", "Afghanistan", "阿富汗"), alias: "afghan" },
+              { name: T("Nhật Bản", "Japan", "日本"), alias: "nippon" },
+              { name: T("Myanmar", "Myanmar", "緬甸"), alias: "burma, miến điện" },
+              { name: T("Triều Tiên", "North Korea", "北韓"), alias: "dprk, bắc triều tiên, bắc hàn, 朝鮮" },
+              { name: T("Singapore", "Singapore", "新加坡"), alias: "sg" },
+            ],
+          },
+          {
+            name: T("Châu Âu", "Europe", "歐洲"),
+            countries: [
+              { name: T("Belarus", "Belarus", "白俄羅斯"), alias: "bạch nga" },
+              { name: T("Crimea", "Crimea", "克里米亞"), alias: "krym" },
+              { name: T("Romania", "Romania", "羅馬尼亞"), alias: "rumani" },
+              { name: T("Nga", "Russia", "俄羅斯"), alias: "russian federation" },
+              { name: T("Ukraine", "Ukraine", "烏克蘭"), alias: "ukraina" },
+              { name: T("Vương quốc Anh", "United Kingdom", "英國"), alias: "uk, great britain, britain, england, scotland, wales, northern ireland" },
+            ],
+          },
+          {
+            name: T("Châu Mỹ", "Americas", "美洲"),
+            countries: [
+              { name: T("Cuba", "Cuba", "古巴"), alias: "" },
+              { name: T("Hoa Kỳ", "United States", "美國"), alias: "us, usa, america, mỹ" },
+              { name: T("Các tiểu đảo xa của Hoa Kỳ", "U.S. Minor Outlying Islands", "美國本土外小島嶼"), alias: "us minor outlying islands, umi, mỹ" },
+              { name: T("Quần đảo Virgin thuộc Mỹ", "U.S. Virgin Islands", "美屬維京群島"), alias: "us virgin islands, usvi" },
+              { name: T("Venezuela", "Venezuela", "委內瑞拉"), alias: "" },
+            ],
+          },
+          {
+            name: T("Trung Đông", "Middle East", "中東"),
+            countries: [
+              { name: T("Iran", "Iran", "伊朗"), alias: "" },
+              { name: T("Liban", "Lebanon", "黎巴嫩"), alias: "" },
+              { name: T("Syria", "Syria", "敘利亞"), alias: "" },
+              { name: T("Yemen", "Yemen", "葉門"), alias: "" },
+            ],
+          },
+          {
+            name: T("Châu Phi", "Africa", "非洲"),
+            countries: [
+              { name: T("Cộng hòa Trung Phi", "Central African Republic", "中非共和國"), alias: "car" },
+              { name: T("CHDC Congo", "Congo (DRC)", "剛果民主共和國"), alias: "drc, dr congo, democratic republic of the congo, cộng hòa dân chủ congo" },
+              { name: T("Guinea-Bissau", "Guinea-Bissau", "幾內亞比索"), alias: "" },
+              { name: T("Libya", "Libya", "利比亞"), alias: "" },
+              { name: T("Mali", "Mali", "馬利"), alias: "" },
+              { name: T("Somalia", "Somalia", "索馬利亞"), alias: "" },
+              { name: T("Nam Sudan", "South Sudan", "南蘇丹"), alias: "" },
+              { name: T("Sudan", "Sudan", "蘇丹"), alias: "" },
+              { name: T("Zimbabwe", "Zimbabwe", "辛巴威"), alias: "" },
+            ],
+          },
+        ],
+        notes: T(
+          "“Trước khi giới thiệu khách, anh/chị kiểm tra giúp em nơi khách đang sống: TMGM chưa hỗ trợ khách ở các nước này.”<br>Hỏi đối tác tệp khách chủ yếu ở đâu. Họ hỏi một nước cụ thể thì gõ tên vào ô kiểm tra.",
+          "“Before you refer anyone, check where the client lives: TMGM doesn't support clients from these countries.”<br>Ask where most of the partner's clients are. If they ask about a specific country, type it into the check box.",
+          "「介紹客戶前，請先確認客戶居住地：TMGM 暫不支援以下國家的客戶。」<br>詢問合作夥伴的客戶主要在哪裡。若對方問到特定國家，可在查詢欄輸入國名。"
+        ),
+      },
+
     },
   };
 })();

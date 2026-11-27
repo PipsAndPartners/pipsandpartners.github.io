@@ -32,12 +32,15 @@ test("chế độ mở: slide Ưu đãi khác có đủ 12 ưu đãi (cả chỉ
   assert.doesNotMatch(h, /xp-private-hint/);
 });
 
-test("chế độ mở: IB mới và các add-on dùng được ngay; đổi ngôn ngữ/đối tượng không khóa lại", { skip }, () => {
-  const b = boot({ locked: true, open: true, search: "?a=ib" });
-  assert.equal(b.api.state.m5mode, "ib");
-  assert.match(b.api.html("m5"), /id="ib-wf"/);
-  assert.match(b.api.html("m5"), /data-act="ib-promo" data-v="thaiIb"/);
-  assert.deepEqual(ids(b.html()).filter((i) => ["m2", "m5"].includes(i)), ["m2", "m5"]);
+test("chế độ mở: slide Ví dụ chỉ còn mô hình MIB (đã bỏ công tắc Mô hình và chế độ IB mới), với cả đối tượng MIB và IB", { skip }, () => {
+  for (const search of ["", "?a=ib"]) {
+    const b = boot({ locked: true, open: true, search }), h = b.api.html("m5");
+    assert.match(h, /class="ex"/, search);
+    assert.match(h, /id="wf"/, search);
+    assert.doesNotMatch(h, /data-act="m5mode"|id="ib-wf"|data-act="ib-promo"|data-ibc=/, search);
+    assert.equal(b.api.state.m5mode, undefined, search);
+    assert.deepEqual(ids(b.html()).filter((i) => ["m2", "m5"].includes(i)), ["m2", "m5"], search);
+  }
 });
 
 test("trang ưu đãi ở chế độ mở: 12 ưu đãi ngay, link #thaiConcert đi thẳng tới slide, không ô nhập mã", { skip }, () => {
