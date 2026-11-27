@@ -4,7 +4,7 @@ Trang tĩnh ba ngôn ngữ (English mặc định, Tiếng Việt, 繁體中文)
 
 | Trang | Địa chỉ | Nội dung |
 |---|---|---|
-| Pitch hợp tác | `/` | 15 slide: pháp lý, IB/MIB là gì (sơ đồ dòng tiền), năm dòng thu nhập, tài khoản, ECN Q4, lịch tiền về, KM, ví dụ, so sánh, ưu đãi, liên hệ |
+| Pitch hợp tác | `/` | 16 slide: pháp lý, IB/MIB là gì (sơ đồ dòng tiền), năm dòng thu nhập, tài khoản, ECN Q4, lịch tiền về, KM, ví dụ, so sánh, ưu đãi, liên hệ, quốc gia không hỗ trợ |
 | Ưu đãi | `/promotions/` | Mỗi ưu đãi một slide: cách tham gia, điều kiện chính, link và QR chương trình |
 
 ## Chạy thử trên máy
@@ -27,7 +27,7 @@ Chỉ cần Node (không cài thêm gì). Máy có thư mục `private/` thì ch
 node --test "tests/*.test.js" "private/tests/*.test.js"
 ```
 
-Bộ công khai (`tests/`) kiểm tra: chức danh và WhatsApp (`bd`), slide IB/MIB là gì (`how`), mã hóa và khóa (`lock`, `lock-build`, `lock-ui`), không lộ nội dung đã khóa và không còn file cấu hình của nơi lưu trữ cũ (`leak`), slide Ưu đãi khác (`slide13`), trang ưu đãi (`promotions`), máy tính IB mới và add-on (`calc-ib`), QR (`qr`), ngày làm việc (`dates`), form liên hệ (`contact`), link đăng ký (`register`).
+Bộ công khai (`tests/`) kiểm tra: chức danh và WhatsApp (`bd`), slide IB/MIB là gì (`how`), mã hóa và khóa (`lock`, `lock-build`, `lock-ui`), không lộ nội dung đã khóa và không còn file cấu hình của nơi lưu trữ cũ (`leak`), slide Ưu đãi khác (`slide13`), slide Không hỗ trợ (`khong-ho-tro`), trang ưu đãi (`promotions`), hàm tính IB mới và add-on trong `calc.js` (`calc-ib`), QR (`qr`), ngày làm việc (`dates`), form liên hệ (`contact`), link đăng ký (`register`).
 
 ## Điều khiển
 
@@ -64,11 +64,13 @@ node scripts/lock.mjs --rotate              # đổi khóa nội dung, giữ m�
 
 Mỗi lần sửa số thì chạy lại `lock.mjs` rồi đẩy `locked.js`. Lưu ý: mọi thứ từng đẩy lên GitHub trước đây vẫn nằm trong lịch sử repo; khóa chỉ bảo vệ từ lần đẩy kế tiếp.
 
-## Slide 11: MIB và IB mới
+## Slide 11: Ví dụ MIB
 
-Công tắc **Mô hình** đầu slide: *MIB có Sub-IB* (chia rebate cho Sub-IB, thưởng KM MIB) hoặc *IB mới* (chỉ khách trực tiếp: rebate + thưởng KM tháng IB, cần ≥ 5 khách kích hoạt trong đó ≥ 3 hoạt động). Cả hai có add-on ECN Q4 (chỉ Edge) và hoàn swap, mặc định tắt.
+Một tháng của MIB có Sub-IB (chia rebate cho Sub-IB, thưởng KM MIB), có add-on ECN Q4 (chỉ Edge) và hoàn swap, mặc định tắt. Mô hình *IB mới* (công tắc **Mô hình**) đã bỏ khỏi slide từ 27/11/2026; các hàm tính `calc.ibMonth` / `calc.promoAddon` và trường `calc` của ưu đãi vẫn giữ trong code, giao diện cũ xem `git show 20959f0:app.js`.
 
-Chế độ IB mới có thêm khung **Ưu đãi khác (add-on)**: mỗi ưu đãi đang nhận đăng ký mà có trường `calc` sẽ hiện thành một nút. Thưởng cho chính IB (vé) cộng vào thu nhập và thay cho thưởng tháng IB; ưu đãi của khách (credit, cashback, points, bốc thăm…) ghi riêng, không cộng vào thu nhập. Halloween Quest và 50% Credit loại trừ nhau. Thêm ưu đãi mới vào máy tính: chỉ cần điền `calc` (xem đầu `promotions/promos-data.js` và `calc.promoAddon` trong `calc.js`).
+## Slide 16: Quốc gia không hỗ trợ
+
+Danh sách 29 quốc gia và vùng lãnh thổ TMGM chưa nhận khách, chia theo khu vực, có ô **Kiểm tra quốc gia của khách** (gõ tiếng Anh, tiếng Việt có/không dấu hoặc tiếng Trung). Thêm/bớt nước: sửa `sections["khong-ho-tro"].regions` trong `content.js` (tên 3 ngôn ngữ + `alias` là tên gọi khác); số trên tiêu đề tự đếm. Sửa xong chạy test `khong-ho-tro` (nó so với danh sách gốc, nên cập nhật `LIST` trong test cùng lúc).
 
 ## Trang ưu đãi (`/promotions/`)
 
@@ -86,7 +88,7 @@ Tên, chức danh (Business Development), Telegram, WhatsApp ở `presenter` tro
 | File | Nội dung |
 |---|---|
 | `content.js` | Chữ (VI/EN/中文) và số công khai của trang pitch; các slide khóa chỉ còn nhãn |
-| `calc.js` | Tính toán: máy tính MIB và IB mới, add-on ECN/swap, ưu đãi khác, bậc tùy chỉnh, so sánh |
+| `calc.js` | Tính toán: máy tính MIB (và hàm IB mới, hiện không dùng trên slide), add-on ECN/swap, ưu đãi khác, bậc tùy chỉnh, so sánh |
 | `dates.js` | Ngày làm việc, lịch nhận tiền, trạng thái ưu đãi theo ngày |
 | `contact.js` | Kiểm tra form và dựng email nháp |
 | `qr.js` | Mã QR vẽ offline (không thư viện) |

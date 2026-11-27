@@ -979,14 +979,6 @@ html { scroll-padding-top: 5.5rem; }
   .top-ctl .seg button { padding: .3rem .4rem; }
 }
 
-/* ---------- slide Ví dụ, chế độ IB mới: khung ưu đãi khác như add-on ---------- */
-.ibp { margin-top: 1.25rem; display: grid; gap: .5rem; align-content: start; }
-.ibp h3 { margin: 0; display: flex; align-items: center; gap: .5rem; font-size: 1.1rem; color: var(--navy); }
-.ibp .ecn-row { margin: 0; }
-.ibp-h { margin: .75rem 0 0; padding-top: .6rem; border-top: 1px solid var(--line); font-size: .75rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.ibp-total { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem .9rem; margin-top: .25rem; padding: .65rem .85rem; border-radius: 10px; background: #EEF4FD; color: var(--navy); }
-.ibp-total small { color: var(--muted); font-weight: 600; }
-
 /* ---------- slide IB/MIB là gì: sơ đồ dòng tiền ---------- */
 .how-top { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: 1rem; }
 .how { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 1.25rem; align-items: stretch; }
@@ -1046,3 +1038,31 @@ html { scroll-padding-top: 5.5rem; }
 .xp-card, .xp-card > * { min-width: 0; }
 .xp-card .xp-name b, .xp-card .xp-name small { overflow-wrap: anywhere; }
 .xp-card .xp-tag { white-space: normal; }
+
+/* ---------- slide Không hỗ trợ: quốc gia và vùng lãnh thổ chưa nhận khách ---------- */
+.ns-check { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1.25rem; margin-bottom: 1.25rem; }
+.ns-search { flex: 0 1 22rem; }
+.ns-res { flex: 1 1 18rem; margin: 0; min-height: 2.75rem; display: flex; align-items: center; font-size: .95rem; }
+.ns-res > span { display: inline-flex; gap: .5rem; align-items: flex-start; }
+.ns-res .ic { margin-top: .2em; }
+.ns-res-hint { color: var(--muted); }
+.ns-res-hit { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); border-radius: 10px; padding: .55rem .85rem; font-weight: 700; }
+.ns-res-miss { color: var(--ink); }
+.ns-res-miss .ic { color: var(--blue); }
+.ns-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr)); gap: .9rem; align-items: start; }
+.ns-reg { background: #fff; border: 1px solid var(--line); border-radius: var(--r); padding: 1rem 1.1rem; transition: opacity .2s; }
+.ns-reg h3 { display: flex; align-items: center; gap: .5rem; margin: 0 0 .65rem; font-size: 1rem; color: var(--navy); }
+.ns-reg h3 .ic { color: var(--blue); }
+.ns-reg h3 small { margin-left: auto; min-width: 1.6rem; text-align: center; font-size: .75rem; font-weight: 800; color: var(--navy); background: #E6EEFB; border-radius: 999px; padding: .1rem .45rem; }
+.ns-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .2rem; }
+.ns-list li { display: flex; gap: .5rem; align-items: flex-start; padding: .3rem .45rem; margin-inline: -.45rem; border-radius: 8px; font-size: .95rem; line-height: 1.35; transition: opacity .2s, background-color .2s; }
+.ns-list .ic { color: #B4432F; margin-top: .1em; }
+.ns-list li.is-hit { background: var(--lime); color: var(--navy); font-weight: 700; }
+.ns-list li.is-hit .ic { color: var(--navy); }
+.ns-grid.is-filtering li:not(.is-hit) { opacity: .4; }
+.ns-reg.is-off { opacity: .55; }
+@media print {
+  .ns-check { display: none; }
+  .ns-reg, .ns-grid.is-filtering li { opacity: 1 !important; }
+  .ns-list li.is-hit { background: none; font-weight: inherit; }
+}
